@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer components {
+  /* Gantt cell sizing */
+  .gantt-cell {
+    @apply min-w-[44px] w-[44px] h-[52px] border-r border-gray-200 flex-shrink-0;
+  }
+  .gantt-row-label {
+    @apply min-w-[180px] w-[180px] flex-shrink-0 sticky left-0 bg-white z-10 border-r border-gray-200;
+  }
+  .gantt-header-cell {
+    @apply min-w-[44px] w-[44px] flex-shrink-0 text-center border-r border-gray-200 py-1;
+  }
+
+  /* Booking source badges */
+  .badge-airbnb  { @apply bg-rose-100 text-rose-700 border border-rose-300; }
+  .badge-direct  { @apply bg-blue-100 text-blue-700 border border-blue-300; }
+  .badge-offline { @apply bg-emerald-100 text-emerald-700 border border-emerald-300; }
+}
+
+/* Custom scrollbar for gantt */
+.gantt-scroll::-webkit-scrollbar        { height: 6px; }
+.gantt-scroll::-webkit-scrollbar-track  { @apply bg-gray-100 rounded; }
+.gantt-scroll::-webkit-scrollbar-thumb  { @apply bg-gray-400 rounded; }

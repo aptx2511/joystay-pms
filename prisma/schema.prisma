@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Room {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  size      Int       // square meters
+  icalUrl   String?   // Airbnb iCal URL for importing
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  bookings  Booking[]
+}
+
+model Guest {
+  id        String    @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  createdAt DateTime  @default(now())
+  bookings  Booking[]
+}
+
+model Booking {
+  id         String   @id @default(cuid())
+  roomId     String
+  guestId    String?
+  // Denormalized guest name for quick display (avoids join when guestId is null)
+  guestName  String
+  checkIn    DateTime
+  checkOut   DateTime
+  // DIRECT | AIRBNB | OFFLINE
+  source     String   @default("DIRECT")
+  // CONFIRMED | PENDING | CANCELLED
+  status     String   @default("CONFIRMED")
+  totalPrice Float?
+  notes      String?
+  // External reference (e.g. Airbnb confirmation code or iCal UID)
+  externalId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  room  Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  guest Guest? @relation(fields: [guestId], references: [id], onDelete: SetNull)
+
+  // Prevent duplicate iCal imports for the same room
+  @@unique([roomId, externalId])
+  @@index([checkIn])
+  @@index([checkOut])
+  @@index([roomId])
+}
