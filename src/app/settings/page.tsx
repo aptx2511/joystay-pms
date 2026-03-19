@@ -55,7 +55,7 @@ export default function SettingsPage() {
   }
 
   function copyExportUrl(roomId: string) {
-    const url = `${window.location.origin}/api/ical/export/${roomId}`;
+    const url = `${window.location.origin}/ical/${roomId}.ics`;
     navigator.clipboard.writeText(url);
     setCopied(roomId);
     setTimeout(() => setCopied(null), 2000);
@@ -139,8 +139,8 @@ export default function SettingsPage() {
               <div className="flex gap-2 items-center">
                 <code className="flex-1 text-xs bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-gray-600 truncate">
                   {typeof window !== "undefined"
-                    ? `${window.location.origin}/api/ical/export/${room.id}`
-                    : `/api/ical/export/${room.id}`}
+                    ? `${window.location.origin}/ical/${room.id}.ics`
+                    : `/ical/${room.id}.ics`}
                 </code>
                 <button
                   onClick={() => copyExportUrl(room.id)}
