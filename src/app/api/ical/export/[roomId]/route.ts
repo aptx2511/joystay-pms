@@ -63,7 +63,7 @@ export async function GET(
         `DTSTAMP:${dtstamp}`,
         `DTSTART;VALUE=DATE:${dtstart}`,
         `DTEND;VALUE=DATE:${dtend}`,
-        `SUMMARY:${escapeText(booking.source === "AIRBNB" ? "Airbnb (Imported)" : "Blocked")}`,
+        `SUMMARY:${escapeText(booking.guestName || (booking.source === "AIRBNB" ? "Airbnb Guest" : "Booked"))}`,
         `DESCRIPTION:${escapeText(booking.source)} booking`,
         "STATUS:CONFIRMED",
         "TRANSP:OPAQUE",

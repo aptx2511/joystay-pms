@@ -5,15 +5,18 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   CalendarDays,
-  Settings,
   Building2,
   RefreshCw,
+  TrendingUp,
+  ClipboardCheck,
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/",          label: "Dashboard",  icon: LayoutDashboard },
-  { href: "/bookings",  label: "Bookings",   icon: CalendarDays },
-  { href: "/settings",  label: "iCal / Sync", icon: RefreshCw },
+  { href: "/",           label: "Dashboard",   icon: LayoutDashboard },
+  { href: "/bookings",   label: "Bookings",    icon: CalendarDays    },
+  { href: "/revenue",    label: "Doanh thu",   icon: TrendingUp      },
+  { href: "/attendance", label: "Chấm công",   icon: ClipboardCheck  },
+  { href: "/settings",   label: "iCal / Sync", icon: RefreshCw       },
 ];
 
 export default function Sidebar() {

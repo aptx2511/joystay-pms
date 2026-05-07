@@ -4,11 +4,11 @@ import { addDays, startOfToday } from "date-fns";
 const prisma = new PrismaClient();
 
 const ROOMS = [
-  { name: "Pop Art Studio",    size: 25, sortOrder: 1 },
-  { name: "B&W Studio Large",  size: 25, sortOrder: 2 },
-  { name: "Indochine Room",    size: 15, sortOrder: 3 },
-  { name: "Midcentury Room",   size: 15, sortOrder: 4 },
-  { name: "B&W Room Small",    size: 15, sortOrder: 5 },
+  { name: "Pop Art Studio",   size: 25, sortOrder: 1, pricePerNight: 1500000 },
+  { name: "B&W Studio Large", size: 25, sortOrder: 2, pricePerNight: 1500000 },
+  { name: "Indochine 1",      size: 15, sortOrder: 3, pricePerNight: 900000  },
+  { name: "Midcentury Room",  size: 15, sortOrder: 4, pricePerNight: 1000000 },
+  { name: "Indochine 2",      size: 15, sortOrder: 5, pricePerNight: 900000  },
 ];
 
 async function main() {
@@ -18,7 +18,7 @@ async function main() {
   for (const room of ROOMS) {
     await prisma.room.upsert({
       where:  { name: room.name },
-      update: { size: room.size, sortOrder: room.sortOrder },
+      update: { size: room.size, sortOrder: room.sortOrder, pricePerNight: room.pricePerNight },
       create: room,
     });
   }
