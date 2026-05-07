@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Trash2 } from "lucide-react";
-import { format, parseISO } from "date-fns";
-import { Booking, BookingFormData, BookingSource, BookingStatus, Room, SOURCE_META } from "@/types";
+import { X, Trash2, Calculator } from "lucide-react";
+import { format, parseISO, differenceInDays } from "date-fns";
+import { Booking, BookingFormData, BookingSource, BookingStatus, Room, SOURCE_META, calcAutoPrice } from "@/types";
 
 interface Props {
   open: boolean;
@@ -25,10 +25,11 @@ const EMPTY: BookingFormData = {
 };
 
 export default function BookingForm({ open, onClose, onSaved, initialData, editBooking }: Props) {
-  const [rooms,   setRooms]   = useState<Room[]>([]);
-  const [form,    setForm]    = useState<BookingFormData>(EMPTY);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState<string | null>(null);
+  const [rooms,      setRooms]      = useState<Room[]>([]);
+  const [form,       setForm]       = useState<BookingFormData>(EMPTY);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
+  const [autoPrice,  setAutoPrice]  = useState<number | null>(null);
 
   // Fetch rooms once
   useEffect(() => {
@@ -58,6 +59,31 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
       setForm({ ...EMPTY, ...initialData });
     }
   }, [open, editBooking, initialData]);
+
+  // Auto-calculate price when room, dates or source change
+  // Weekend (Fri/Sat) uses weekendPricePerNight if set; Airbnb: −3% commission
+  useEffect(() => {
+    const room = rooms.find((r) => r.id === form.roomId);
+    if (!room?.pricePerNight || !form.checkIn || !form.checkOut) {
+      setAutoPrice(null);
+      return;
+    }
+    const nights = differenceInDays(parseISO(form.checkOut), parseISO(form.checkIn));
+    if (nights <= 0) { setAutoPrice(null); return; }
+    const calculated = calcAutoPrice(
+      parseISO(form.checkIn), parseISO(form.checkOut),
+      room.pricePerNight, room.weekendPricePerNight ?? null,
+      form.source as BookingSource
+    );
+    setAutoPrice(calculated);
+    // Auto-fill only when price is empty or matches previous auto value
+    setForm((prev) => ({
+      ...prev,
+      totalPrice: prev.totalPrice === "" || prev.totalPrice === String(autoPrice)
+        ? String(calculated)
+        : prev.totalPrice,
+    }));
+  }, [form.roomId, form.checkIn, form.checkOut, form.source, rooms]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
 
@@ -222,17 +248,43 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
 
           {/* Price */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Total Price (VND)
-            </label>
-            <input
-              type="number"
-              value={form.totalPrice}
-              onChange={set("totalPrice")}
-              placeholder="e.g. 1500000"
-              min={0}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-gray-600">Tổng tiền (VND)</label>
+              {autoPrice !== null && (
+                <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
+                  <Calculator size={11} />
+                  {form.source === "AIRBNB" ? "Airbnb (−3%):" : "Tự tính:"}
+                  {" "}{autoPrice.toLocaleString("vi-VN")} đ
+                  <button
+                    type="button"
+                    onClick={() => setForm((p) => ({ ...p, totalPrice: String(autoPrice) }))}
+                    className="ml-1 px-1.5 py-0.5 bg-amber-100 rounded hover:bg-amber-200 text-amber-700"
+                  >
+                    Dùng giá này
+                  </button>
+                </span>
+              )}
+            </div>
+            <div className="relative">
+              <input
+                type="number"
+                value={form.totalPrice}
+                onChange={set("totalPrice")}
+                placeholder={autoPrice ? String(autoPrice) : "Nhập tổng tiền…"}
+                min={0}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 pr-16"
+              />
+              {form.totalPrice && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
+                  {Number(form.totalPrice).toLocaleString("vi-VN")} đ
+                </span>
+              )}
+            </div>
+            {autoPrice !== null && form.totalPrice && Number(form.totalPrice) !== autoPrice && (
+              <p className="text-xs text-violet-500 mt-1 flex items-center gap-1">
+                ✏️ Đã chỉnh tay — giá tự tính: {autoPrice.toLocaleString("vi-VN")} đ
+              </p>
+            )}
           </div>
 
           {/* Notes */}

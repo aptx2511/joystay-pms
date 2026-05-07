@@ -1,12 +1,41 @@
-export type BookingSource = "DIRECT" | "AIRBNB" | "OFFLINE";
+export type BookingSource = "DIRECT" | "AIRBNB" | "BOOKING" | "AGODA" | "TRAVELOKA" | "OFFLINE";
 export type BookingStatus = "CONFIRMED" | "PENDING" | "CANCELLED";
 
 export interface Room {
   id: string;
   name: string;
   size: number;
+  pricePerNight: number | null;
+  weekendPricePerNight: number | null;
   icalUrl: string | null;
+  bookingIcalUrl: string | null;
+  agodaIcalUrl: string | null;
+  travelokaIcalUrl: string | null;
   createdAt: string;
+}
+
+/**
+ * Calculate total price for a stay, using weekend pricing for Fri & Sat nights.
+ * checkIn/checkOut are ISO date strings (YYYY-MM-DD) or Date objects.
+ * source: "AIRBNB" applies 3% commission deduction.
+ */
+export function calcAutoPrice(
+  checkIn: Date, checkOut: Date,
+  pricePerNight: number,
+  weekendPricePerNight: number | null,
+  source: BookingSource
+): number {
+  const nights = Math.round((checkOut.getTime() - checkIn.getTime()) / 86_400_000);
+  if (nights <= 0) return 0;
+  const weekend = weekendPricePerNight ?? pricePerNight;
+  let total = 0;
+  for (let i = 0; i < nights; i++) {
+    const d = new Date(checkIn);
+    d.setDate(checkIn.getDate() + i);
+    const dow = d.getDay(); // 5=Fri, 6=Sat
+    total += (dow === 5 || dow === 6) ? weekend : pricePerNight;
+  }
+  return source === "AIRBNB" ? Math.round(total * 0.97) : total;
 }
 
 export interface Guest {
@@ -69,6 +98,27 @@ export const SOURCE_META: Record<
     bgClass: "bg-blue-500",
     textClass: "text-blue-700",
     borderClass: "border-blue-400",
+  },
+  BOOKING: {
+    label: "Booking.com",
+    color: "#003580",
+    bgClass: "bg-blue-700",
+    textClass: "text-blue-800",
+    borderClass: "border-blue-600",
+  },
+  AGODA: {
+    label: "Agoda",
+    color: "#E91E2C",
+    bgClass: "bg-red-500",
+    textClass: "text-red-700",
+    borderClass: "border-red-400",
+  },
+  TRAVELOKA: {
+    label: "Traveloka",
+    color: "#0194F3",
+    bgClass: "bg-sky-500",
+    textClass: "text-sky-700",
+    borderClass: "border-sky-400",
   },
   OFFLINE: {
     label: "Offline / Zalo",
