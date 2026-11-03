@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Link2, Save, RefreshCw, Copy, Check, DollarSign } from "lucide-react";
+import { Link2, Save, RefreshCw, Copy, Check, DollarSign, Plus } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { Room } from "@/types";
 
@@ -17,6 +17,9 @@ export default function SettingsPage() {
   const [syncing,  setSyncing]  = useState(false);
   const [syncLog,  setSyncLog]  = useState<string | null>(null);
   const [copied,   setCopied]   = useState<string | null>(null);
+  const [newRoom,  setNewRoom]  = useState({ name: "The Matcha Bath Loft", size: "50", price: "1490000", weekend: "1590000" });
+  const [creating, setCreating] = useState(false);
+  const [createMsg, setCreateMsg] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/rooms")
@@ -83,6 +86,41 @@ export default function SettingsPage() {
     }
   }
 
+  async function createRoom() {
+    setCreating(true);
+    setCreateMsg(null);
+    try {
+      const res = await fetch("/api/rooms", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          name:                 newRoom.name,
+          size:                 parseInt(newRoom.size, 10),
+          pricePerNight:        newRoom.price   ? parseFloat(newRoom.price)   : null,
+          weekendPricePerNight: newRoom.weekend ? parseFloat(newRoom.weekend) : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCreateMsg(data.error ?? "Không tạo được phòng");
+        return;
+      }
+      const room = data as Room;
+      setRooms((prev) => [...prev, room]);
+      setUrls((p) => ({ ...p, [room.id]: "" }));
+      setBookingUrls((p) => ({ ...p, [room.id]: "" }));
+      setAgodaUrls((p) => ({ ...p, [room.id]: "" }));
+      setTravelokaUrls((p) => ({ ...p, [room.id]: "" }));
+      setPrices((p) => ({ ...p, [room.id]: room.pricePerNight != null ? String(room.pricePerNight) : "" }));
+      setWeekendPrices((p) => ({ ...p, [room.id]: room.weekendPricePerNight != null ? String(room.weekendPricePerNight) : "" }));
+      setCreateMsg(`Đã tạo phòng ${room.name}. Dán iCal URL bên dưới rồi bấm Save Room.`);
+    } catch {
+      setCreateMsg("Không tạo được phòng. Kiểm tra console.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   async function syncAll() {
     setSyncing(true);
     setSyncLog(null);
@@ -133,6 +171,40 @@ export default function SettingsPage() {
           <br />
           <strong>Export:</strong> Copy URL export và dán vào mục Calendar Sync của từng kênh để kênh đó biết lịch booking trực tiếp.
         </p>
+
+        {/* Add new room */}
+        <div className="bg-white rounded-xl border border-dashed border-amber-300 shadow-sm p-5">
+          <h3 className="font-semibold text-gray-800 mb-3">Thêm phòng mới</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { key: "name",    label: "Tên phòng",          type: "text"   },
+              { key: "size",    label: "Diện tích (m²)",     type: "number" },
+              { key: "price",   label: "Giá ngày thường",    type: "number" },
+              { key: "weekend", label: "Giá cuối tuần",      type: "number" },
+            ].map(({ key, label, type }) => (
+              <div key={key}>
+                <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">{label}</label>
+                <input
+                  type={type}
+                  value={newRoom[key as keyof typeof newRoom]}
+                  onChange={(e) => setNewRoom((p) => ({ ...p, [key]: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p className="text-xs text-gray-500">{createMsg}</p>
+            <button
+              onClick={createRoom}
+              disabled={creating || !newRoom.name.trim() || !newRoom.size}
+              className="flex items-center gap-1 text-sm px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50"
+            >
+              <Plus size={14} />
+              {creating ? "Đang tạo…" : "Tạo phòng"}
+            </button>
+          </div>
+        </div>
 
         {rooms.map((room) => (
           <div key={room.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">

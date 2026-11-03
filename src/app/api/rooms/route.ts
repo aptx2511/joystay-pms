@@ -11,6 +11,57 @@ export async function GET() {
   }
 }
 
+// Create a new room
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const {
+      name, size, pricePerNight, weekendPricePerNight, sortOrder,
+      icalUrl, bookingIcalUrl, agodaIcalUrl, travelokaIcalUrl,
+    } = body as {
+      name: string;
+      size: number;
+      pricePerNight?: number | null;
+      weekendPricePerNight?: number | null;
+      sortOrder?: number;
+      icalUrl?: string;
+      bookingIcalUrl?: string;
+      agodaIcalUrl?: string;
+      travelokaIcalUrl?: string;
+    };
+
+    if (!name?.trim()) return NextResponse.json({ error: "name is required" }, { status: 400 });
+    if (!size || Number(size) <= 0) return NextResponse.json({ error: "size is required" }, { status: 400 });
+
+    const existing = await prisma.room.findUnique({ where: { name: name.trim() } });
+    if (existing) return NextResponse.json({ error: "Room name already exists" }, { status: 409 });
+
+    let order = sortOrder;
+    if (order === undefined || order === null) {
+      const last = await prisma.room.findFirst({ orderBy: { sortOrder: "desc" } });
+      order = (last?.sortOrder ?? 0) + 1;
+    }
+
+    const room = await prisma.room.create({
+      data: {
+        name: name.trim(),
+        size: Number(size),
+        sortOrder: Number(order),
+        pricePerNight:        pricePerNight        ? Number(pricePerNight)        : null,
+        weekendPricePerNight: weekendPricePerNight ? Number(weekendPricePerNight) : null,
+        icalUrl:          icalUrl          || null,
+        bookingIcalUrl:   bookingIcalUrl   || null,
+        agodaIcalUrl:     agodaIcalUrl     || null,
+        travelokaIcalUrl: travelokaIcalUrl || null,
+      },
+    });
+    return NextResponse.json(room, { status: 201 });
+  } catch (error) {
+    console.error("[POST /api/rooms]", error);
+    return NextResponse.json({ error: "Failed to create room" }, { status: 500 });
+  }
+}
+
 // Update room settings (icalUrl, pricePerNight, weekendPricePerNight)
 export async function PATCH(request: Request) {
   try {

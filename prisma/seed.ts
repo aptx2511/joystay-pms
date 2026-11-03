@@ -9,6 +9,7 @@ const ROOMS = [
   { name: "Indochine 1",      size: 15, sortOrder: 3, pricePerNight: 900000  },
   { name: "Midcentury Room",  size: 15, sortOrder: 4, pricePerNight: 1000000 },
   { name: "Indochine 2",      size: 15, sortOrder: 5, pricePerNight: 900000  },
+  { name: "The Matcha Bath Loft", size: 50, sortOrder: 6, pricePerNight: 1490000, weekendPricePerNight: 1590000 },
 ];
 
 async function main() {
@@ -23,7 +24,7 @@ async function main() {
     });
   }
 
-  console.log("✅  5 rooms created.");
+  console.log("✅  rooms created.");
 
   // Add a handful of sample bookings so the calendar looks alive
   const rooms = await prisma.room.findMany({ orderBy: { sortOrder: "asc" } });
