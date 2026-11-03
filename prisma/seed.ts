@@ -19,7 +19,7 @@ async function main() {
   for (const room of ROOMS) {
     await prisma.room.upsert({
       where:  { name: room.name },
-      update: { size: room.size, sortOrder: room.sortOrder, pricePerNight: room.pricePerNight },
+      update: { size: room.size, sortOrder: room.sortOrder, pricePerNight: room.pricePerNight, weekendPricePerNight: room.weekendPricePerNight ?? null },
       create: room,
     });
   }
