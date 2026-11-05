@@ -38,6 +38,7 @@ const T = {
   tooEarly: { en: "Your codes will appear here from", vi: "Mã cửa sẽ hiện ở đây từ" },
   preparing: { en: "We are preparing your codes — refresh in a few minutes, or message us if you are already here.", vi: "Joystay đang chuẩn bị mã — tải lại sau vài phút, hoặc nhắn Joystay nếu bạn đã tới nơi." },
   expired: { en: "Your stay has ended — thank you for staying with us!", vi: "Kỳ lưu trú đã kết thúc — cảm ơn bạn đã ở Joystay!" },
+  sameCode: { en: "One code for the main door, inner gate and your room", vi: "Một mã dùng cho cửa nhà, cổng và cửa phòng" },
   pressHash: { en: "Tap the screen to wake the lock → enter the code → press #", vi: "Chạm màn hình cho khoá sáng → nhập mã → nhấn #" },
   firstUse: { en: "Please use your codes for the first time within 24 hours of check-in time. Arriving later? Message us for new codes.", vi: "Hãy dùng mã lần đầu trong vòng 24 giờ kể từ giờ nhận phòng. Đến trễ hơn? Nhắn Joystay để được cấp mã mới." },
   wayTitle: { en: "Getting in", vi: "Cách vào nhà" },
@@ -239,6 +240,12 @@ export default function StayPortalPage({ params }: { params: Promise<{ token: st
       <Card icon={<KeyRound size={18} />} title={t("codesTitle")} done={v.codesState === "visible"}>
         {v.codesState === "visible" ? (
           <>
+            {v.codes.length > 1 && v.codes.every((c) => c.code === v.codes[0].code) ? (
+              <div className="bg-[#F4F8F4] rounded-2xl px-4 py-5 text-center">
+                <p className="text-4xl font-bold tracking-[0.3em] tabular-nums">{v.codes[0].code}<span className="text-[#6B9467]"> #</span></p>
+                <p className="text-sm text-[#6A7A68] mt-2">{t("sameCode")}</p>
+              </div>
+            ) : (
             <div className="space-y-2">
               {v.codes.map((c) => (
                 <div key={c.door} className="flex justify-between items-center bg-[#F4F8F4] rounded-xl px-4 py-3">
@@ -247,6 +254,7 @@ export default function StayPortalPage({ params }: { params: Promise<{ token: st
                 </div>
               ))}
             </div>
+            )}
             <p className="text-sm text-[#6A7A68] mt-3">{t("pressHash")}</p>
             <p className="text-xs text-[#6A7A68] mt-1">{t("firstUse")}</p>
             {v.wifi && (

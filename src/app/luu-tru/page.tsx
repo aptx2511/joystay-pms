@@ -15,7 +15,7 @@ interface Stay {
 }
 interface Data { today: string; lookupLink: string; stays: Stay[] }
 
-const DEFAULT_DOORS = ["Cửa nhà", "Cổng (mặt trong)", "Phòng"];
+const DEFAULT_DOORS = ["Main door · Cửa nhà", "Inner gate · Cổng trong", "Phòng"];
 const ddmm = (k: string) => `${k.slice(8, 10)}/${k.slice(5, 7)}`;
 const time = (iso: string | null) => (iso ? new Date(iso).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", timeZone: "Asia/Ho_Chi_Minh" }) : "");
 
@@ -95,7 +95,7 @@ export default function StaysPage() {
             <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">{g.title} ({g.list.length})</h2>
             <div className="space-y-3">
               {g.list.map((s) => {
-                const codes = edit[s.bookingId] ?? (s.doorCodes.length ? s.doorCodes : DEFAULT_DOORS.map((d) => ({ door: d === "Phòng" ? `Phòng ${s.roomNumber ?? ""}`.trim() : d, code: "" })));
+                const codes = edit[s.bookingId] ?? (s.doorCodes.length ? s.doorCodes : DEFAULT_DOORS.map((d) => ({ door: d === "Phòng" ? `Room ${s.roomNumber ?? ""} · Phòng ${s.roomNumber ?? ""}` : d, code: "" })));
                 return (
                   <div key={s.bookingId} className="bg-white border border-gray-200 rounded-xl p-4">
                     <div className="flex flex-wrap justify-between gap-2">

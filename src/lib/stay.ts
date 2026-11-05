@@ -160,7 +160,7 @@ export async function staysBetween(from: Date, to: Date) {
         { checkIn: { lt: from }, checkOut: { gt: from } },
       ],
     },
-    include: { room: true, portal: true },
+    include: { room: true, portal: true, guest: true },
     orderBy: [{ checkIn: "asc" }],
   });
 }
@@ -200,6 +200,8 @@ export async function pendingCodes() {
       guestName: b.guestName,
       checkIn: dayKey(b.checkIn),
       checkOut: dayKey(b.checkOut),
+      // mã chung 4 số = 4 số cuối ĐT khách (Airbnb iCal hoặc ĐT khách đặt trực tiếp)
+      phoneLast4: b.portal?.phoneLast4 ?? (b.guest?.phone ? b.guest.phone.replace(/\D/g, "").slice(-4) : null),
     }));
 }
 
@@ -226,9 +228,9 @@ export function demoView(stepKey: string | null) {
       id: "demo", token: DEMO_TOKEN, lang: "en", idPhotos: step.idSent ? ["demo"] : [],
       idSubmittedAt: step.idSent ? new Date() : null, arrivalTime: null, guests: null,
       doorCodes: [
-        { door: "Cửa nhà", code: "482915" },
-        { door: "Cổng (mặt trong)", code: "730164" },
-        { door: "Phòng 202", code: "915382" },
+        { door: "Main door · Cửa nhà", code: "4821" },
+        { door: "Inner gate · Cổng trong", code: "4821" },
+        { door: "Room 202 · Phòng 202", code: "4821" },
       ],
       feedback: null, issues: [],
     },
