@@ -92,8 +92,8 @@ export default function GanttCalendar({ onAddBooking, onEditBooking, refreshKey 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       {/* ── Toolbar ── */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-gray-50">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-3 md:px-5 py-3 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center gap-1 md:gap-2">
           <button
             onClick={prevPeriod}
             className="p-1.5 rounded hover:bg-gray-200 transition-colors"
@@ -101,8 +101,8 @@ export default function GanttCalendar({ onAddBooking, onEditBooking, refreshKey 
           >
             <ChevronLeft size={18} />
           </button>
-          <span className="font-semibold text-gray-800 w-40 text-center">
-            {format(windowStart, "MMMM yyyy")}
+          <span className="font-semibold text-gray-800 w-32 md:w-40 text-center text-sm md:text-base">
+            {format(windowStart, "MMM yyyy")}
           </span>
           <button
             onClick={nextPeriod}
@@ -113,7 +113,7 @@ export default function GanttCalendar({ onAddBooking, onEditBooking, refreshKey 
           </button>
           <button
             onClick={goToday}
-            className="ml-2 text-xs px-2.5 py-1 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium transition-colors"
+            className="ml-1 text-xs px-2 py-1 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 font-medium transition-colors"
           >
             Today
           </button>
@@ -124,7 +124,8 @@ export default function GanttCalendar({ onAddBooking, onEditBooking, refreshKey 
             onClick={() => onAddBooking()}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors"
           >
-            <Plus size={16} /> New Booking
+            <Plus size={16} />
+            <span className="hidden sm:inline">New Booking</span>
           </button>
         )}
       </div>
