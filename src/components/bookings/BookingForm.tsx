@@ -61,7 +61,7 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
   }, [open, editBooking, initialData]);
 
   // Auto-calculate price when room, dates or source change
-  // Weekend (Fri/Sat) uses weekendPricePerNight if set; Airbnb: −3% commission
+  // Weekend (Fri/Sat) uses weekendPricePerNight if set; OTA: trừ phí kênh theo CHANNEL_FEE (Airbnb 15,5%)
   useEffect(() => {
     const room = rooms.find((r) => r.id === form.roomId);
     if (!room?.pricePerNight || !form.checkIn || !form.checkOut) {
@@ -258,7 +258,7 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
               {autoPrice !== null && (
                 <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
                   <Calculator size={11} />
-                  {form.source === "AIRBNB" ? "Airbnb (−3%):" : "Tự tính:"}
+                  {form.source === "AIRBNB" ? "Airbnb (−15,5% phí):" : "Tự tính:"}
                   {" "}{autoPrice.toLocaleString("vi-VN")} đ
                   <button
                     type="button"

@@ -202,6 +202,7 @@ export default function GanttCalendar({ onAddBooking, onEditBooking, refreshKey 
                     const meta = SOURCE_META[booking.source as BookingSource];
                     const isCancelled = booking.status === "CANCELLED";
                     const isPending   = booking.status === "PENDING";
+                    const isBlocked   = booking.status === "BLOCKED";
 
                     return (
                       <div
@@ -209,7 +210,7 @@ export default function GanttCalendar({ onAddBooking, onEditBooking, refreshKey 
                         className={`absolute top-[6px] rounded-md text-white text-xs font-medium
                           flex items-center px-2 overflow-hidden whitespace-nowrap cursor-pointer
                           shadow-sm transition-opacity hover:opacity-90
-                          ${meta.bgClass}
+                          ${isBlocked ? "bg-slate-300 !text-slate-600 italic" : meta.bgClass}
                           ${isCancelled ? "opacity-40 line-through" : ""}
                           ${isPending   ? "opacity-70 border-2 border-dashed border-white/60" : ""}
                         `}

@@ -1,5 +1,8 @@
 export type BookingSource = "DIRECT" | "AIRBNB" | "BOOKING" | "AGODA" | "TRAVELOKA" | "OFFLINE";
-export type BookingStatus = "CONFIRMED" | "PENDING" | "CANCELLED";
+// BLOCKED = ngày bị khoá trên kênh OTA (không phải lượt ở thật / hoặc là bản phản chiếu
+// của booking đã có ở kênh khác). Vẫn tính là "không còn trống", KHÔNG tính doanh thu,
+// KHÔNG sinh việc dọn, KHÔNG xuất ngược ra iCal.
+export type BookingStatus = "CONFIRMED" | "PENDING" | "CANCELLED" | "BLOCKED";
 
 export interface Room {
   id: string;
@@ -11,13 +14,29 @@ export interface Room {
   bookingIcalUrl: string | null;
   agodaIcalUrl: string | null;
   travelokaIcalUrl: string | null;
+  airbnbIcalUrl2?: string | null;
+  roomNumber?: string | null;
   createdAt: string;
 }
 
 /**
- * Calculate total price for a stay, using weekend pricing for Fri & Sat nights.
- * checkIn/checkOut are ISO date strings (YYYY-MM-DD) or Date objects.
- * source: "AIRBNB" applies 3% commission deduction.
+ * Phí kênh (phần trăm bị trừ trên giá khách trả) — dùng để ƯỚC TÍNH tiền thực nhận
+ * khi kênh không gửi giá qua iCal. Số thật lấy từ file chi trả (payout) của OTA.
+ * Airbnb 15,5%: đo từ báo cáo thu nhập T9/2026 (12.252.500 thực nhận / 14.500.000 gộp).
+ * Sửa ở đây nếu biểu phí thay đổi.
+ */
+export const CHANNEL_FEE: Record<BookingSource, number> = {
+  AIRBNB:    0.155,
+  BOOKING:   0.15,
+  AGODA:     0.18,
+  TRAVELOKA: 0.15,
+  DIRECT:    0,
+  OFFLINE:   0,
+};
+
+/**
+ * Calculate total price for a stay, using weekend pricing for Fri & Sat nights,
+ * minus the channel fee (CHANNEL_FEE) for OTA sources.
  */
 export function calcAutoPrice(
   checkIn: Date, checkOut: Date,
@@ -35,7 +54,7 @@ export function calcAutoPrice(
     const dow = d.getDay(); // 5=Fri, 6=Sat
     total += (dow === 5 || dow === 6) ? weekend : pricePerNight;
   }
-  return source === "AIRBNB" ? Math.round(total * 0.97) : total;
+  return Math.round(total * (1 - (CHANNEL_FEE[source] ?? 0)));
 }
 
 export interface Guest {
@@ -136,4 +155,5 @@ export const STATUS_META: Record<
   CONFIRMED: { label: "Confirmed", bgClass: "bg-green-100", textClass: "text-green-800" },
   PENDING:   { label: "Pending",   bgClass: "bg-yellow-100", textClass: "text-yellow-800" },
   CANCELLED: { label: "Cancelled", bgClass: "bg-gray-100",   textClass: "text-gray-500" },
+  BLOCKED:   { label: "Blocked",   bgClass: "bg-slate-100",  textClass: "text-slate-500" },
 };

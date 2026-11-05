@@ -37,7 +37,9 @@ export async function GET(
     include: {
       bookings: {
         where: {
-          status: { not: "CANCELLED" },
+          // BLOCKED = bản phản chiếu / khoá lịch kéo về từ OTA → không xuất ngược lại
+          // (tránh vòng lặp khoá lịch mãi không mở khi booking gốc đã huỷ)
+          status: { notIn: ["CANCELLED", "BLOCKED"] },
           checkOut: { gte: subDays(new Date(), 1) },
         },
         orderBy: { checkIn: "asc" },

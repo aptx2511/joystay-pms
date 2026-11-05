@@ -9,18 +9,23 @@ import {
   RefreshCw,
   TrendingUp,
   ClipboardCheck,
+  Sparkles,
+  BedDouble,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/",           label: "Dashboard",   icon: LayoutDashboard },
   { href: "/bookings",   label: "Bookings",    icon: CalendarDays    },
   { href: "/revenue",    label: "Doanh thu",   icon: TrendingUp      },
+  { href: "/luu-tru",    label: "Lưu trú",     icon: BedDouble       },
+  { href: "/housekeeping", label: "Dọn phòng", icon: Sparkles        },
   { href: "/attendance", label: "Chấm công",   icon: ClipboardCheck  },
   { href: "/settings",   label: "iCal / Sync", icon: RefreshCw       },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  if (pathname?.startsWith("/t/") || pathname === "/s" || pathname?.startsWith("/s/")) return null; // trang lao công: không hiện menu quản trị
 
   return (
     <aside className="hidden md:flex w-60 min-h-screen bg-slate-900 text-slate-100 flex-col flex-shrink-0">

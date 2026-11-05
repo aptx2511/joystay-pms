@@ -66,8 +66,14 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { id, icalUrl, bookingIcalUrl, agodaIcalUrl, travelokaIcalUrl, pricePerNight, weekendPricePerNight } = body as {
+    const {
+      id, icalUrl, bookingIcalUrl, agodaIcalUrl, travelokaIcalUrl, pricePerNight, weekendPricePerNight,
+      name, roomNumber, airbnbIcalUrl2,
+    } = body as {
       id: string;
+      name?: string;
+      roomNumber?: string;
+      airbnbIcalUrl2?: string;
       icalUrl?: string;
       bookingIcalUrl?: string;
       agodaIcalUrl?: string;
@@ -85,6 +91,9 @@ export async function PATCH(request: Request) {
         ...(bookingIcalUrl       !== undefined && { bookingIcalUrl:       bookingIcalUrl       || null }),
         ...(agodaIcalUrl         !== undefined && { agodaIcalUrl:         agodaIcalUrl         || null }),
         ...(travelokaIcalUrl     !== undefined && { travelokaIcalUrl:     travelokaIcalUrl     || null }),
+        ...(airbnbIcalUrl2       !== undefined && { airbnbIcalUrl2:       airbnbIcalUrl2       || null }),
+        ...(roomNumber           !== undefined && { roomNumber:           roomNumber?.trim()   || null }),
+        ...(name?.trim()                       && { name:                 name.trim() }),
         ...(pricePerNight !== undefined && {
           pricePerNight: pricePerNight ? Number(pricePerNight) : null,
         }),

@@ -7,6 +7,8 @@ import {
   CalendarDays,
   TrendingUp,
   ClipboardCheck,
+  Sparkles,
+  BedDouble,
   RefreshCw,
 } from "lucide-react";
 
@@ -14,12 +16,15 @@ const NAV_ITEMS = [
   { href: "/",           label: "Dashboard",  icon: LayoutDashboard },
   { href: "/bookings",   label: "Bookings",   icon: CalendarDays    },
   { href: "/revenue",    label: "Doanh thu",  icon: TrendingUp      },
+  { href: "/luu-tru",    label: "Lưu trú",     icon: BedDouble       },
+  { href: "/housekeeping", label: "Dọn phòng", icon: Sparkles       },
   { href: "/attendance", label: "Chấm công",  icon: ClipboardCheck  },
   { href: "/settings",   label: "Sync",       icon: RefreshCw       },
 ];
 
 export default function BottomNav() {
   const pathname = usePathname();
+  if (pathname?.startsWith("/t/") || pathname === "/s" || pathname?.startsWith("/s/")) return null; // trang lao công: không hiện menu quản trị
 
   return (
     <nav

@@ -11,6 +11,9 @@ export default function SettingsPage() {
   const [bookingUrls,      setBookingUrls]      = useState<Record<string, string>>({});
   const [agodaUrls,        setAgodaUrls]        = useState<Record<string, string>>({});
   const [travelokaUrls,    setTravelokaUrls]    = useState<Record<string, string>>({});
+  const [airbnb2Urls,      setAirbnb2Urls]      = useState<Record<string, string>>({});
+  const [names,            setNames]            = useState<Record<string, string>>({});
+  const [roomNumbers,      setRoomNumbers]      = useState<Record<string, string>>({});
   const [prices,           setPrices]           = useState<Record<string, string>>({});
   const [weekendPrices,    setWeekendPrices]    = useState<Record<string, string>>({});
   const [saving,           setSaving]           = useState<Record<string, boolean>>({});
@@ -30,6 +33,9 @@ export default function SettingsPage() {
         const initBooking:   Record<string, string> = {};
         const initAgoda:     Record<string, string> = {};
         const initTraveloka: Record<string, string> = {};
+        const initAirbnb2:   Record<string, string> = {};
+        const initNames:     Record<string, string> = {};
+        const initNumbers:   Record<string, string> = {};
         const initPrices:    Record<string, string> = {};
         const initWeekend:   Record<string, string> = {};
         data.forEach((r) => {
@@ -37,6 +43,9 @@ export default function SettingsPage() {
           initBooking[r.id]   = r.bookingIcalUrl   ?? "";
           initAgoda[r.id]     = r.agodaIcalUrl     ?? "";
           initTraveloka[r.id] = r.travelokaIcalUrl ?? "";
+          initAirbnb2[r.id]   = r.airbnbIcalUrl2   ?? "";
+          initNames[r.id]     = r.name;
+          initNumbers[r.id]   = r.roomNumber       ?? "";
           initPrices[r.id]    = r.pricePerNight        != null ? String(r.pricePerNight)        : "";
           initWeekend[r.id]   = r.weekendPricePerNight != null ? String(r.weekendPricePerNight) : "";
         });
@@ -44,6 +53,9 @@ export default function SettingsPage() {
         setBookingUrls(initBooking);
         setAgodaUrls(initAgoda);
         setTravelokaUrls(initTraveloka);
+        setAirbnb2Urls(initAirbnb2);
+        setNames(initNames);
+        setRoomNumbers(initNumbers);
         setPrices(initPrices);
         setWeekendPrices(initWeekend);
       });
@@ -63,6 +75,9 @@ export default function SettingsPage() {
           bookingIcalUrl:       bookingUrls[roomId],
           agodaIcalUrl:         agodaUrls[roomId],
           travelokaIcalUrl:     travelokaUrls[roomId],
+          airbnbIcalUrl2:       airbnb2Urls[roomId],
+          name:                 names[roomId],
+          roomNumber:           roomNumbers[roomId],
           pricePerNight:        priceVal   ? parseFloat(priceVal)   : null,
           weekendPricePerNight: weekendVal ? parseFloat(weekendVal) : null,
         }),
@@ -75,6 +90,9 @@ export default function SettingsPage() {
               bookingIcalUrl:       bookingUrls[roomId],
               agodaIcalUrl:         agodaUrls[roomId],
               travelokaIcalUrl:     travelokaUrls[roomId],
+              airbnbIcalUrl2:       airbnb2Urls[roomId],
+              name:                 names[roomId] || r.name,
+              roomNumber:           roomNumbers[roomId],
               pricePerNight:        priceVal   ? parseFloat(priceVal)   : null,
               weekendPricePerNight: weekendVal ? parseFloat(weekendVal) : null,
             }
@@ -209,9 +227,26 @@ export default function SettingsPage() {
         {rooms.map((room) => (
           <div key={room.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
             <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="font-semibold text-gray-800">{room.name}</h3>
-                <p className="text-xs text-gray-400">{room.size} m²</p>
+              <div className="flex-1 grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Tên phòng</label>
+                  <input
+                    value={names[room.id] ?? room.name}
+                    onChange={(e) => setNames((p) => ({ ...p, [room.id]: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm font-semibold border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                  <p className="text-xs text-gray-400 mt-0.5">{room.size} m²</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Số phòng</label>
+                  <input
+                    value={roomNumbers[room.id] ?? ""}
+                    onChange={(e) => setRoomNumbers((p) => ({ ...p, [room.id]: e.target.value }))}
+                    placeholder="VD: 302"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                  <p className="text-xs text-gray-400 mt-0.5">Cùng số = cùng 1 phòng thật</p>
+                </div>
               </div>
             </div>
 
@@ -255,6 +290,7 @@ export default function SettingsPage() {
             <div className="mb-3 space-y-2">
               {[
                 { label: "Airbnb",       color: "rose",  placeholder: "https://www.airbnb.com/calendar/ical/…",          value: urls[room.id]          ?? "", onChange: (v: string) => setUrls((p)          => ({ ...p, [room.id]: v })) },
+                { label: "Airbnb (listing thứ 2 cùng phòng)", color: "rose", placeholder: "VD: 302 Parisian Chic + Black & White", value: airbnb2Urls[room.id] ?? "", onChange: (v: string) => setAirbnb2Urls((p) => ({ ...p, [room.id]: v })) },
                 { label: "Booking.com",  color: "blue",  placeholder: "https://ical.booking.com/v1/export?t=…",           value: bookingUrls[room.id]   ?? "", onChange: (v: string) => setBookingUrls((p)   => ({ ...p, [room.id]: v })) },
                 { label: "Agoda",        color: "red",   placeholder: "https://ical.agoda.com/…",                         value: agodaUrls[room.id]     ?? "", onChange: (v: string) => setAgodaUrls((p)     => ({ ...p, [room.id]: v })) },
                 { label: "Traveloka",    color: "sky",   placeholder: "https://www.traveloka.com/en-vn/hotel/ical/…",     value: travelokaUrls[room.id] ?? "", onChange: (v: string) => setTravelokaUrls((p) => ({ ...p, [room.id]: v })) },
