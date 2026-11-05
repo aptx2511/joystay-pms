@@ -159,7 +159,9 @@ async function runSync() {
           externalId: { not: null },
           status: { in: ["CONFIRMED", "BLOCKED"] },
           checkIn: { gte: today },
-          OR: feedKey === "icalUrl" ? [{ feedKey }, { feedKey: null }] : [{ feedKey }],
+          // booking nhập trước khi có feedKey (null): mỗi phòng chỉ có 1 lịch cho mỗi kênh, riêng Airbnb có
+          // thể có listing thứ 2 → bản ghi cũ của Airbnb chỉ đối chiếu với listing chính (icalUrl)
+          OR: feedKey === "airbnbIcalUrl2" ? [{ feedKey }] : [{ feedKey }, { feedKey: null }],
         },
         select: { id: true, externalId: true },
       });
