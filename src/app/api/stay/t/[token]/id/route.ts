@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { blobReady, putPrivate } from "@/lib/blob";
 import { prisma } from "@/lib/prisma";
-import { findByToken, guestView, idPhotosOf, stayLine } from "@/lib/stay";
+import { DEMO_TOKEN, demoView, findByToken, guestView, idPhotosOf, stayLine } from "@/lib/stay";
 import { tgNotify } from "@/lib/telegram";
 import { publicBaseUrl } from "@/lib/housekeeping";
 
@@ -14,6 +14,7 @@ const storeId = (path: string, file: File) => putPrivate(path, file, file.type);
 
 export async function POST(request: Request, { params }: Params) {
   const { token } = await params;
+  if (token === DEMO_TOKEN) return NextResponse.json({ ...demoView("chieu-ngay-den"), idSubmitted: true, idCount: 1 });
   const b = await findByToken(token);
   if (!b) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
   const p = b.portal!;

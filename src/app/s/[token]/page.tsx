@@ -12,6 +12,7 @@ interface View {
   codesState: "visible" | "need_id" | "too_early" | "preparing" | "expired"; codesOpenAt: string;
   wifi: { name: string; password: string } | null; hotline: string; whatsapp: string; googleReview: string;
   feedbackSent: boolean; issuesCount: number;
+  demo?: { step: string; steps: { key: string; label: string }[] };
 }
 
 const T = {
@@ -100,19 +101,26 @@ export default function StayPortalPage({ params }: { params: Promise<{ token: st
   const [rating, setRating] = useState(0);
   const [fb, setFb] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [at, setAt] = useState<string>("");
+  const qs = token === "demo" && at ? `?at=${at}` : "";
   const t = (k: keyof typeof T) => (T[k] as Record<Lang, string>)[lang];
 
+  useEffect(() => {
+    if (token === "demo") setAt(new URLSearchParams(window.location.search).get("at") ?? "chieu-ngay-den");
+  }, [token]);
+
   const load = useCallback(async () => {
-    const r = await fetch(`/api/stay/t/${token}`, { cache: "no-store" });
+    if (token === "demo" && !at) return;
+    const r = await fetch(`/api/stay/t/${token}${qs}`, { cache: "no-store" });
     const d = await r.json();
     if (!r.ok) { setError(d.error); return; }
     setV(d);
     setLang((l) => (d.lang === "vi" || d.lang === "en" ? d.lang : l));
     setArr({ time: d.arrivalTime ?? "", guests: d.guests ? String(d.guests) : "" });
-  }, [token]);
+  }, [token, at, qs]);
   useEffect(() => { load(); }, [load]);
 
-  async function post(body: Record<string, unknown>, key: string, url = `/api/stay/t/${token}`) {
+  async function post(body: Record<string, unknown>, key: string, url = `/api/stay/t/${token}${qs}`) {
     setBusy(key); setError(null);
     try {
       const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -129,7 +137,7 @@ export default function StayPortalPage({ params }: { params: Promise<{ token: st
       for (const f of Array.from(files).slice(0, 4)) {
         const fd = new FormData();
         fd.append("file", new File([await compress(f)], "id.jpg", { type: "image/jpeg" }));
-        const r = await fetch(`/api/stay/t/${token}/id`, { method: "POST", body: fd });
+        const r = await fetch(`/api/stay/t/${token}/id${qs}`, { method: "POST", body: fd });
         const d = await r.json();
         if (!r.ok) { setError(d.error); break; }
         setV(d);
@@ -147,6 +155,20 @@ export default function StayPortalPage({ params }: { params: Promise<{ token: st
   return (
     <Shell>
       <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />
+
+      {v.demo && (
+        <div className="bg-amber-100 border border-amber-300 rounded-2xl p-3 text-sm">
+          <p className="font-semibold text-amber-900">DEMO — dữ liệu giả, không gửi gì cho ai. Chọn thời điểm để xem khách thấy gì:</p>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {v.demo.steps.map((s) => (
+              <button key={s.key} onClick={() => { setAt(s.key); window.history.replaceState(null, "", `?at=${s.key}`); }}
+                className={`px-2.5 py-1 rounded-full text-xs ${v.demo!.step === s.key ? "bg-amber-600 text-white" : "bg-white text-amber-900 border border-amber-300"}`}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <header className="bg-[#1A1E1A] text-white rounded-3xl p-5">
         <div className="flex justify-between items-start">
@@ -168,7 +190,7 @@ export default function StayPortalPage({ params }: { params: Promise<{ token: st
       {error && <p className="text-sm text-red-600 mt-3 px-1">{error}</p>}
 
       {/* 1. Giấy tờ */}
-      {v.requireId && v.phase !== "after" && (
+      {v.phase !== "after" && (
         <Card icon={<ShieldCheck size={18} />} title={t("regTitle")} done={v.idSubmitted}>
           {v.idSubmitted ? (
             <p className="text-sm text-[#6B9467] font-medium flex items-center gap-1.5"><Check size={16} /> {t("idDone")} ({v.idCount} {t("photos")})</p>
@@ -182,7 +204,7 @@ export default function StayPortalPage({ params }: { params: Promise<{ token: st
                 </button>
                 <span className="text-sm text-[#6A7A68]">{v.idCount} {t("photos")}</span>
               </div>
-              <button onClick={() => post({ action: "submit" }, "submit", `/api/stay/t/${token}/id`)} disabled={v.idCount === 0 || busy !== null}
+              <button onClick={() => post({ action: "submit" }, "submit", `/api/stay/t/${token}/id${qs}`)} disabled={v.idCount === 0 || busy !== null}
                 className="w-full mt-3 bg-[#6B9467] disabled:bg-gray-300 text-white rounded-xl py-3 font-semibold">
                 {busy === "submit" ? <Loader2 size={18} className="animate-spin mx-auto" /> : t("submitId")}
               </button>

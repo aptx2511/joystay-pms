@@ -41,6 +41,15 @@ function safeEqual(a: string, b: string) {
 }
 
 export function middleware(req: NextRequest) {
+  // stay.joystay.vn: chỉ phục vụ cổng khách, mọi đường dẫn khác chuyển về /s
+  const host = req.headers.get("host") ?? "";
+  if (host.startsWith("stay.")) {
+    const p = req.nextUrl.pathname;
+    const ok = p === "/s" || p.startsWith("/s/") || p.startsWith("/api/stay/lookup") || p.startsWith("/api/stay/t/");
+    if (!ok) return NextResponse.redirect(new URL("/s", req.url));
+    return NextResponse.next();
+  }
+
   const password = process.env.PMS_ADMIN_PASSWORD;
   if (!password) return NextResponse.next(); // chưa bật bảo vệ
 

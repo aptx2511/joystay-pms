@@ -16,13 +16,16 @@ export const ID_RETENTION_DAYS = Number(process.env.STAY_ID_RETENTION_DAYS || 30
 export const HOTLINE = process.env.STAY_HOTLINE || "+84 854 777 730";
 export const WHATSAPP = process.env.STAY_WHATSAPP || "https://wa.me/84854777730";
 export const GOOGLE_REVIEW = process.env.STAY_GOOGLE_REVIEW_URL || "https://g.page/r/CdJ1fHrqKevREAE/review";
-const requireId = () => process.env.STAY_REQUIRE_ID !== "false";
+// Mặc định KHÔNG bắt buộc giấy tờ mới hiện mã (chủ quyết định 05/11). Đặt STAY_REQUIRE_ID=true để bật lại.
+const requireId = () => process.env.STAY_REQUIRE_ID === "true";
 
 export interface DoorCode { door: string; code: string }
 export type BookingWithStay = Booking & { room: Room; portal: StayPortal | null };
 
-export const portalLink = (p: Pick<StayPortal, "token">) => `${publicBaseUrl()}/s/${p.token}`;
-export const lookupLink = () => `${publicBaseUrl()}/s`;
+/** Tên miền cho khách (vd https://stay.joystay.vn) — chưa đặt thì dùng địa chỉ PMS */
+export const stayBaseUrl = () => (process.env.STAY_PUBLIC_URL || publicBaseUrl()).replace(/\/$/, "");
+export const portalLink = (p: Pick<StayPortal, "token">) => `${stayBaseUrl()}/s/${p.token}`;
+export const lookupLink = () => `${stayBaseUrl()}/s`;
 const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 export const idPhotosOf = (p: StayPortal | null) => arr<string>(p?.idPhotos);
 export const doorCodesOf = (p: StayPortal | null) => arr<DoorCode>(p?.doorCodes);
@@ -198,4 +201,42 @@ export async function pendingCodes() {
       checkIn: dayKey(b.checkIn),
       checkOut: dayKey(b.checkOut),
     }));
+}
+
+// ── DEMO: /s/demo?at=<bước> — dữ liệu giả, không ghi DB, không gửi Telegram ──────
+export const DEMO_TOKEN = "demo";
+export const DEMO_STEPS: { key: string; label: string; dayOffset: number; time: string; idSent: boolean }[] = [
+  { key: "dat-phong",      label: "Vừa đặt phòng",          dayOffset: -5, time: "12:00", idSent: false },
+  { key: "truoc-2-ngay",   label: "2 ngày trước",           dayOffset: -2, time: "10:00", idSent: false },
+  { key: "sang-ngay-den",  label: "Ngày đến 09:00",         dayOffset: 0,  time: "09:00", idSent: true },
+  { key: "chieu-ngay-den", label: "Ngày đến 16:00",         dayOffset: 0,  time: "16:00", idSent: true },
+  { key: "ngay-tra",       label: "Ngày trả phòng 09:00",   dayOffset: 2,  time: "09:00", idSent: true },
+  { key: "sau-tra",        label: "Sau khi trả phòng",      dayOffset: 3,  time: "10:00", idSent: true },
+];
+
+export function demoView(stepKey: string | null) {
+  const step = DEMO_STEPS.find((s) => s.key === stepKey) ?? DEMO_STEPS[3];
+  const ci = vnToday();
+  const co = new Date(ci.getTime() + 2 * DAY);
+  const now = vnAt(dayKey(new Date(ci.getTime() + step.dayOffset * DAY)), step.time);
+  const fake = {
+    id: "demo", guestName: "Anna Demo", source: "AIRBNB", checkIn: ci, checkOut: co,
+    room: { id: "demo", name: "Pop Art Studio", roomNumber: "202", size: 25 },
+    portal: {
+      id: "demo", token: DEMO_TOKEN, lang: "en", idPhotos: step.idSent ? ["demo"] : [],
+      idSubmittedAt: step.idSent ? new Date() : null, arrivalTime: null, guests: null,
+      doorCodes: [
+        { door: "Cửa nhà", code: "482915" },
+        { door: "Cổng (mặt trong)", code: "730164" },
+        { door: "Phòng 202", code: "915382" },
+      ],
+      feedback: null, issues: [],
+    },
+  } as unknown as BookingWithStay;
+  const v = guestView(fake, now);
+  return {
+    ...v,
+    wifi: v.codes.length ? { name: "Joystay", password: "(mật khẩu thật hiện ở đây)" } : null,
+    demo: { step: step.key, steps: DEMO_STEPS.map(({ key, label }) => ({ key, label })) },
+  };
 }

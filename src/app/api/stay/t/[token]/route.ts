@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { findByToken, guestView, stayLine } from "@/lib/stay";
+import { DEMO_TOKEN, demoView, findByToken, guestView, stayLine } from "@/lib/stay";
 import { tgNotify } from "@/lib/telegram";
 import { publicBaseUrl } from "@/lib/housekeeping";
 
 type Params = { params: Promise<{ token: string }> };
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(req: Request, { params }: Params) {
   const { token } = await params;
+  if (token === DEMO_TOKEN) return NextResponse.json(demoView(new URL(req.url).searchParams.get("at")));
   const b = await findByToken(token);
   if (!b) return NextResponse.json({ error: "Link không đúng hoặc đặt phòng đã huỷ / Invalid link" }, { status: 404 });
   const v = guestView(b);
@@ -31,6 +32,7 @@ export async function GET(_req: Request, { params }: Params) {
  */
 export async function POST(request: Request, { params }: Params) {
   const { token } = await params;
+  if (token === DEMO_TOKEN) return NextResponse.json(demoView(new URL(request.url).searchParams.get("at")));
   const b = await findByToken(token);
   if (!b) return NextResponse.json({ error: "Invalid link" }, { status: 404 });
   const p = b.portal!;
