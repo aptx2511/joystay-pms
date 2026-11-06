@@ -21,9 +21,16 @@ const T = {
   checkout: { en: "Check-out by", vi: "Trả phòng trước" },
   regTitle: { en: "1 · Guest registration", vi: "1 · Đăng ký lưu trú" },
   regBody: {
-    en: "Vietnamese law requires us to register every guest with the local police. Please upload a clear photo of the passport photo page (or both sides of a Vietnamese ID card) for each guest. Photos are only used for registration and are deleted 30 days after check-out.",
-    vi: "Theo quy định, Joystay phải khai báo lưu trú cho mọi khách với công an phường. Vui lòng tải ảnh rõ nét trang thông tin hộ chiếu (hoặc 2 mặt CCCD) của từng khách. Ảnh chỉ dùng để khai báo và được xoá sau 30 ngày kể từ ngày trả phòng.",
+    en: "Vietnamese law requires us to register every guest with the local police. Please upload clear photos for EACH guest (all 4 corners visible, no glare). Photos are only used for registration and are deleted 30 days after check-out.",
+    vi: "Theo quy định, Joystay phải khai báo lưu trú cho mọi khách với công an phường. Vui lòng tải ảnh rõ nét của TỪNG khách (thấy đủ 4 góc, không loá). Ảnh chỉ dùng để khai báo và được xoá sau 30 ngày kể từ ngày trả phòng.",
   },
+  idForeign: { en: "Foreign guests — 2 photos per person", vi: "Khách nước ngoài — 2 ảnh mỗi người" },
+  idPassport: { en: "Passport photo page", vi: "Trang thông tin hộ chiếu" },
+  idVisa: { en: "Vietnam visa / e-visa / entry stamp page", vi: "Trang thị thực Việt Nam / e-visa / dấu nhập cảnh" },
+  idLocal: { en: "Vietnamese guests — ID card (CCCD), both sides", vi: "Khách Việt Nam — CCCD 2 mặt" },
+  idFront: { en: "Front", vi: "Mặt trước" },
+  idBack: { en: "Back", vi: "Mặt sau" },
+  stairs: { en: "stairs only, no elevator", vi: "chỉ có thang bộ" },
   addPhoto: { en: "Add photo", vi: "Thêm ảnh" },
   photos: { en: "photo(s) added", vi: "ảnh đã thêm" },
   submitId: { en: "Submit registration", vi: "Gửi giấy tờ" },
@@ -182,6 +189,9 @@ export default function StayPortalPage({ params }: { params: Promise<{ token: st
         </div>
         <h1 className="text-2xl font-semibold mt-3">{t("welcome")}{v.guestName ? `, ${v.guestName}` : ""}</h1>
         <p className="text-white/80 mt-1">{v.room}</p>
+        {floorLabel(v.roomNumber, lang) && (
+          <p className="text-[#A8C8A4] text-sm mt-0.5">{floorLabel(v.roomNumber, lang)} · {t("stairs")}</p>
+        )}
         <div className="grid grid-cols-2 gap-2 mt-4 text-sm">
           <div className="bg-white/10 rounded-xl p-3"><p className="text-white/60 text-xs">{t("checkin")}</p><p className="font-semibold">{v.checkInTime} · {fmtDate(v.checkIn, lang)}</p></div>
           <div className="bg-white/10 rounded-xl p-3"><p className="text-white/60 text-xs">{t("checkout")}</p><p className="font-semibold">{v.checkOutTime} · {fmtDate(v.checkOut, lang)}</p></div>
@@ -198,6 +208,7 @@ export default function StayPortalPage({ params }: { params: Promise<{ token: st
           ) : (
             <>
               <p className="text-sm text-[#6A7A68]">{t("regBody")}</p>
+              <IdExamples t={t} />
               <div className="flex items-center gap-3 mt-3">
                 <button onClick={() => fileRef.current?.click()} disabled={busy !== null}
                   className="flex items-center gap-2 border-2 border-dashed border-[#6B9467] text-[#6B9467] rounded-xl px-4 py-3 text-sm font-medium">
@@ -365,5 +376,108 @@ function Card({ icon, title, done, children }: { icon: React.ReactNode; title: s
       </h2>
       {children}
     </section>
+  );
+}
+
+// ── Tầng: 1xx = tầng trệt, 2xx = lầu 1, 3xx = lầu 2, 4xx = lầu 3 (chỉ có thang bộ) ──
+function floorLabel(roomNumber: string | null, lang: Lang): string | null {
+  const n = Number(String(roomNumber ?? "").trim().charAt(0));
+  if (!n) return null;
+  const f = n - 1;
+  if (lang === "vi") return f === 0 ? "Tầng trệt" : `Lầu ${f}`;
+  if (f === 0) return "Ground floor";
+  const ord = f === 1 ? "1st" : f === 2 ? "2nd" : f === 3 ? "3rd" : `${f}th`;
+  return `${ord} floor (${f} flight${f > 1 ? "s" : ""} of stairs up)`;
+}
+
+// ── Ảnh minh hoạ giấy tờ cần chụp (hình vẽ mẫu, không phải giấy tờ thật) ──
+function IdExamples({ t }: { t: (k: "idForeign" | "idPassport" | "idVisa" | "idLocal" | "idFront" | "idBack") => string }) {
+  return (
+    <div className="mt-3 space-y-3">
+      <div>
+        <p className="text-xs font-semibold text-[#1A1E1A] mb-1.5">🌍 {t("idForeign")}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Example n={1} label={t("idPassport")}><PassportSvg /></Example>
+          <Example n={2} label={t("idVisa")}><VisaSvg /></Example>
+        </div>
+      </div>
+      <div>
+        <p className="text-xs font-semibold text-[#1A1E1A] mb-1.5">🇻🇳 {t("idLocal")}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Example n={1} label={t("idFront")}><CardSvg front /></Example>
+          <Example n={2} label={t("idBack")}><CardSvg /></Example>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Example({ n, label, children }: { n: number; label: string; children: React.ReactNode }) {
+  return (
+    <figure className="bg-[#F4F8F3] rounded-xl p-2 border border-[#C8DCC6]">
+      <div className="relative">
+        {children}
+        <span className="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-[#6B9467] text-white text-[11px] font-bold flex items-center justify-center">{n}</span>
+      </div>
+      <figcaption className="text-[11px] leading-tight text-[#1A1E1A] mt-1.5 text-center">{label}</figcaption>
+    </figure>
+  );
+}
+
+const ink = "#6A7A68", soft = "#C8DCC6", hi = "#6B9467";
+
+function PassportSvg() {
+  return (
+    <svg viewBox="0 0 160 110" className="w-full h-auto" aria-hidden>
+      <rect x="2" y="2" width="156" height="106" rx="6" fill="#fff" stroke={hi} strokeWidth="2.5" />
+      <text x="10" y="16" fontSize="8" fontWeight="700" fill={ink}>PASSPORT</text>
+      <rect x="10" y="22" width="34" height="44" rx="3" fill={soft} />
+      <circle cx="27" cy="38" r="8" fill="#fff" /><rect x="15" y="50" width="24" height="12" rx="6" fill="#fff" />
+      {[24, 34, 44, 54, 64].map((y) => <rect key={y} x="52" y={y} width={y % 20 === 4 ? 70 : 92} height="5" rx="2" fill={soft} />)}
+      <rect x="8" y="78" width="144" height="24" rx="3" fill="#F4F8F3" />
+      <text x="12" y="88" fontSize="7" fontFamily="monospace" fill={ink}>P&lt;VNMXXXXXX&lt;&lt;XXXXX&lt;&lt;&lt;&lt;&lt;</text>
+      <text x="12" y="98" fontSize="7" fontFamily="monospace" fill={ink}>X000000&lt;0XXX0000000&lt;&lt;&lt;&lt;</text>
+    </svg>
+  );
+}
+
+function VisaSvg() {
+  return (
+    <svg viewBox="0 0 160 110" className="w-full h-auto" aria-hidden>
+      <rect x="2" y="2" width="156" height="106" rx="6" fill="#fff" stroke={hi} strokeWidth="2.5" />
+      <rect x="10" y="10" width="140" height="62" rx="4" fill="#FDF6E7" stroke="#E7C98B" />
+      <text x="16" y="22" fontSize="7.5" fontWeight="700" fill="#9A6B12">VIET NAM · VISA / THỊ THỰC</text>
+      <rect x="16" y="28" width="24" height="32" rx="2" fill="#F1E2BF" />
+      {[30, 38, 46, 54].map((y) => <rect key={y} x="46" y={y} width={y === 54 ? 50 : 96} height="4" rx="2" fill="#F1E2BF" />)}
+      <circle cx="122" cy="90" r="14" fill="none" stroke="#B4473C" strokeWidth="2" strokeDasharray="3 2" />
+      <text x="110" y="93" fontSize="6.5" fontWeight="700" fill="#B4473C">ENTRY</text>
+      <text x="12" y="88" fontSize="6.5" fill={ink}>or e-visa printout</text>
+      <text x="12" y="98" fontSize="6.5" fill={ink}>/ entry stamp</text>
+    </svg>
+  );
+}
+
+function CardSvg({ front = false }: { front?: boolean }) {
+  return (
+    <svg viewBox="0 0 160 100" className="w-full h-auto" aria-hidden>
+      <rect x="2" y="2" width="156" height="96" rx="8" fill="#fff" stroke={hi} strokeWidth="2.5" />
+      {front ? (
+        <>
+          <text x="10" y="16" fontSize="7" fontWeight="700" fill={ink}>CĂN CƯỚC CÔNG DÂN</text>
+          <rect x="10" y="24" width="30" height="40" rx="3" fill={soft} />
+          <circle cx="25" cy="38" r="7" fill="#fff" /><rect x="15" y="49" width="20" height="11" rx="5" fill="#fff" />
+          {[26, 36, 46, 56].map((y) => <rect key={y} x="48" y={y} width={y === 56 ? 60 : 98} height="5" rx="2" fill={soft} />)}
+          <rect x="10" y="74" width="40" height="16" rx="2" fill="#F4F8F3" />
+        </>
+      ) : (
+        <>
+          <rect x="10" y="12" width="22" height="18" rx="2" fill="#E7C98B" />
+          {[16, 24].map((y) => <rect key={y} x="40" y={y} width="100" height="4" rx="2" fill={soft} />)}
+          <rect x="8" y="58" width="144" height="32" rx="3" fill="#F4F8F3" />
+          <text x="12" y="70" fontSize="7" fontFamily="monospace" fill={ink}>IDVNM0000000000&lt;&lt;&lt;&lt;&lt;</text>
+          <text x="12" y="82" fontSize="7" fontFamily="monospace" fill={ink}>XXXXX&lt;&lt;XXXX&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;</text>
+        </>
+      )}
+    </svg>
   );
 }

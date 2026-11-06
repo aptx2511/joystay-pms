@@ -25,7 +25,7 @@ function guestMessage(s: Stay) {
     `Please open your personal stay page to complete the guest registration (required by Vietnamese law) — your door codes will appear there on your check-in day:`,
     s.link ?? "",
     ``,
-    `Xin chào! Vui lòng mở link trên để gửi giấy tờ khai báo lưu trú — mã cửa sẽ hiện tại đó vào ngày nhận phòng.`,
+    `Xin chào! Vui lòng mở link trên để gửi giấy tờ khai báo lưu trú — mã cửa sẽ hiện tại đó từ 10:00 hôm trước ngày nhận phòng.`,
   ].join("\n");
 }
 
@@ -155,7 +155,7 @@ export default function StaysPage() {
 
                       {/* Mã cửa */}
                       <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase mb-1.5 flex items-center gap-1"><KeyRound size={13} /> Mã cửa (khách thấy sau khi gửi giấy tờ, từ 10:00 ngày nhận phòng)</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase mb-1.5 flex items-center gap-1"><KeyRound size={13} /> Mã cửa (khách thấy từ 10:00 hôm trước ngày nhận phòng · mở được từ 12:00 ngày nhận)</p>
                         <div className="space-y-1.5">
                           {codes.map((c, i) => (
                             <div key={i} className="flex gap-1.5">
