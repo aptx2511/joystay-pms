@@ -281,8 +281,16 @@ export default function StayPortalPage({ params }: { params: Promise<{ token: st
           <ol className="space-y-2 text-sm text-[#1A1E1A] list-decimal pl-5">
             {T.way[lang].map((s) => <li key={s}>{s}</li>)}
           </ol>
+          <div className="grid gap-3 mt-4">
+            <a href="/guide/parking.jpg" target="_blank" rel="noreferrer">
+              <img src="/guide/parking.jpg" alt={lang === "vi" ? "Hướng dẫn gửi xe & đường đi" : "Parking & directions"} className="w-full rounded-2xl border border-[#C8DCC6]" loading="lazy" />
+            </a>
+            <a href="/guide/unlock.jpg" target="_blank" rel="noreferrer">
+              <img src="/guide/unlock.jpg" alt={lang === "vi" ? "Hướng dẫn mở khoá" : "How to unlock"} className="w-full rounded-2xl border border-[#C8DCC6]" loading="lazy" />
+            </a>
+          </div>
           <div className="flex flex-wrap gap-2 mt-3">
-            <a href="https://maps.google.com/?q=382/23+Nguy%E1%BB%85n+Th%E1%BB%8B+Minh+Khai,+B%C3%A0n+C%E1%BB%9D,+H%E1%BB%93+Ch%C3%AD+Minh" target="_blank" rel="noreferrer"
+            <a href="https://maps.app.goo.gl/1dreN6KLAHZEqRuc6" target="_blank" rel="noreferrer"
               className="text-sm px-3 py-2 rounded-xl bg-[#E8F2E8]">Google Maps</a>
             <a href="https://joystay.vn/guide" target="_blank" rel="noreferrer" className="text-sm px-3 py-2 rounded-xl bg-[#E8F2E8]">{t("fullGuide")}</a>
           </div>

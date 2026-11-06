@@ -1,7 +1,7 @@
 /**
  * Cổng khách — Ops 2.0 Module 3
  * Mỗi lượt ở (booking CONFIRMED) có 1 link riêng /s/<token>:
- *   giấy tờ (khai báo lưu trú) → mã cửa (mở từ 10:00 ngày nhận phòng, sau khi đã gửi giấy tờ)
+ *   giấy tờ (khai báo lưu trú) → mã cửa (hiện từ 10:00 một ngày trước ngày nhận phòng; mã mở được cửa từ 12:00 ngày nhận phòng)
  *   → hướng dẫn vào nhà → báo sự cố → hướng dẫn trả phòng → góp ý / đánh giá.
  */
 import type { Booking, Room, StayPortal } from "@prisma/client";
@@ -11,7 +11,8 @@ import { DAY, dayKey, newToken, publicBaseUrl, roomLabel, vnToday } from "@/lib/
 
 export const CHECKIN_TIME = process.env.STAY_CHECKIN_TIME || "15:00";
 export const CHECKOUT_TIME = process.env.STAY_CHECKOUT_TIME || "12:00";
-export const CODES_OPEN_TIME = process.env.STAY_CODES_OPEN_TIME || "10:00"; // giờ VN ngày nhận phòng
+export const CODES_OPEN_TIME = process.env.STAY_CODES_OPEN_TIME || "10:00"; // giờ VN mã cửa bắt đầu hiện
+export const CODES_OPEN_DAYS_BEFORE = Number(process.env.STAY_CODES_OPEN_DAYS_BEFORE ?? "1"); // hiện trước ngày nhận phòng bao nhiêu ngày
 export const ID_RETENTION_DAYS = Number(process.env.STAY_ID_RETENTION_DAYS || 30);
 export const HOTLINE = process.env.STAY_HOTLINE || "+84 854 777 730";
 export const WHATSAPP = process.env.STAY_WHATSAPP || "https://wa.me/84854777730";
@@ -80,7 +81,7 @@ export async function purgeOldIds() {
 
 export function stayPhase(b: Booking, now = new Date()) {
   const ci = dayKey(b.checkIn), co = dayKey(b.checkOut);
-  const codesOpenAt = vnAt(ci, CODES_OPEN_TIME);
+  const codesOpenAt = vnAt(dayKey(new Date(b.checkIn.getTime() - CODES_OPEN_DAYS_BEFORE * DAY)), CODES_OPEN_TIME);
   const checkoutAt = vnAt(co, CHECKOUT_TIME);
   const today = dayKey(vnToday(now));
   const phase =
@@ -209,7 +210,7 @@ export async function pendingCodes() {
 export const DEMO_TOKEN = "demo";
 export const DEMO_STEPS: { key: string; label: string; dayOffset: number; time: string; idSent: boolean }[] = [
   { key: "dat-phong",      label: "Vừa đặt phòng",          dayOffset: -5, time: "12:00", idSent: false },
-  { key: "truoc-2-ngay",   label: "2 ngày trước",           dayOffset: -2, time: "10:00", idSent: false },
+  { key: "truoc-1-ngay",   label: "1 ngày trước 10:00",     dayOffset: -1, time: "10:00", idSent: false },
   { key: "sang-ngay-den",  label: "Ngày đến 09:00",         dayOffset: 0,  time: "09:00", idSent: true },
   { key: "chieu-ngay-den", label: "Ngày đến 16:00",         dayOffset: 0,  time: "16:00", idSent: true },
   { key: "ngay-tra",       label: "Ngày trả phòng 09:00",   dayOffset: 2,  time: "09:00", idSent: true },

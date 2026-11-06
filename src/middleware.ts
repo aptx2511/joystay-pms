@@ -23,6 +23,7 @@ const PUBLIC_PREFIXES = [
   "/s/",                 // cổng khách /s/<mã bí mật>
   "/api/stay/lookup",    // khách tra cứu bằng mã đặt phòng + 4 số ĐT
   "/api/stay/t/",
+  "/guide/",             // ảnh hướng dẫn tự nhận phòng
 ];
 
 function isPublic(pathname: string, method: string) {
@@ -45,7 +46,7 @@ export function middleware(req: NextRequest) {
   const host = req.headers.get("host") ?? "";
   if (host.startsWith("stay.")) {
     const p = req.nextUrl.pathname;
-    const ok = p === "/s" || p.startsWith("/s/") || p.startsWith("/api/stay/lookup") || p.startsWith("/api/stay/t/");
+    const ok = p === "/s" || p.startsWith("/s/") || p.startsWith("/api/stay/lookup") || p.startsWith("/api/stay/t/") || p.startsWith("/guide/");
     if (!ok) return NextResponse.redirect(new URL("/s", req.url));
     return NextResponse.next();
   }
