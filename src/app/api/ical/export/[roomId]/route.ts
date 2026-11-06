@@ -37,9 +37,13 @@ export async function GET(
     include: {
       bookings: {
         where: {
-          // BLOCKED = bản phản chiếu / khoá lịch kéo về từ OTA → không xuất ngược lại
-          // (tránh vòng lặp khoá lịch mãi không mở khi booking gốc đã huỷ)
-          status: { notIn: ["CANCELLED", "BLOCKED"] },
+          // BLOCKED kéo về từ OTA (bản phản chiếu / "Not available") → không xuất ngược lại
+          // (tránh vòng lặp khoá lịch mãi không mở khi booking gốc đã huỷ).
+          // Riêng BLOCKED nguồn DIRECT = CHỦ KHOÁ LỊCH trong PMS → có xuất để mọi kênh cùng đóng.
+          OR: [
+            { status: { notIn: ["CANCELLED", "BLOCKED"] } },
+            { status: "BLOCKED", source: "DIRECT" },
+          ],
           checkOut: { gte: subDays(new Date(), 1) },
         },
         orderBy: { checkIn: "asc" },
@@ -65,7 +69,7 @@ export async function GET(
         `DTSTAMP:${dtstamp}`,
         `DTSTART;VALUE=DATE:${dtstart}`,
         `DTEND;VALUE=DATE:${dtend}`,
-        `SUMMARY:${escapeText(booking.guestName || (booking.source === "AIRBNB" ? "Airbnb Guest" : "Booked"))}`,
+        `SUMMARY:${booking.status === "BLOCKED" ? "Not available" : escapeText(booking.guestName || (booking.source === "AIRBNB" ? "Airbnb Guest" : "Booked"))}`,
         `DESCRIPTION:${escapeText(booking.source)} booking`,
         "STATUS:CONFIRMED",
         "TRANSP:OPAQUE",
