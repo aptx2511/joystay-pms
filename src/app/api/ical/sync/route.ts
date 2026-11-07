@@ -76,7 +76,9 @@ async function runSync() {
             where: {
               roomId: room.id,
               source: { not: platform.source },
-              status: { in: ["CONFIRMED", "PENDING"] },
+              // gồm cả BLOCKED (chủ khoá lịch / "Not available" của kênh khác): Booking.com xuất lại
+              // các ngày đã đóng thành sự kiện thường → không có luật này sẽ thành booking ma (vd 201 06→07/11)
+              status: { in: ["CONFIRMED", "PENDING", "BLOCKED"] },
               createdAt: { lt: existing?.createdAt ?? now },
               checkIn: { gte: new Date(checkIn.getTime() - 86_400_000), lte: new Date(checkIn.getTime() + 86_400_000) },
             },
