@@ -24,6 +24,13 @@ const EMPTY: BookingFormData = {
   notes:      "",
 };
 
+const STATUS_LABEL: Record<BookingStatus, string> = {
+  CONFIRMED: "Confirmed",
+  PENDING: "Pending",
+  CANCELLED: "Cancelled",
+  BLOCKED: "🔒 Khoá lịch",
+};
+
 export default function BookingForm({ open, onClose, onSaved, initialData, editBooking }: Props) {
   const [rooms,      setRooms]      = useState<Room[]>([]);
   const [form,       setForm]       = useState<BookingFormData>(EMPTY);
@@ -64,7 +71,8 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
   // Weekend (Fri/Sat) uses weekendPricePerNight if set; OTA: trừ phí kênh theo CHANNEL_FEE (Airbnb 15,5%)
   useEffect(() => {
     const room = rooms.find((r) => r.id === form.roomId);
-    if (!room?.pricePerNight || !form.checkIn || !form.checkOut) {
+    // Khoá lịch / huỷ: không tính tiền (tránh khoá lịch bị cộng vào doanh thu)
+    if (form.status === "BLOCKED" || form.status === "CANCELLED" || !room?.pricePerNight || !form.checkIn || !form.checkOut) {
       setAutoPrice(null);
       return;
     }
@@ -83,7 +91,7 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
         ? String(calculated)
         : prev.totalPrice,
     }));
-  }, [form.roomId, form.checkIn, form.checkOut, form.source, rooms]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [form.roomId, form.checkIn, form.checkOut, form.source, form.status, rooms]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
 
@@ -138,7 +146,7 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
@@ -160,7 +168,7 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="px-4 md:px-6 py-4 md:py-5 space-y-4 overflow-y-auto flex-1">
+        <form id="booking-form" onSubmit={handleSubmit} className="px-4 md:px-6 py-4 md:py-5 space-y-4 overflow-y-auto flex-1 min-h-0">
           {error && (
             <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-4 py-2.5">
               {error}
@@ -200,17 +208,17 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
 
           {/* Dates */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-medium text-gray-600 mb-1">Check-in *</label>
               <input
                 type="date"
                 value={form.checkIn}
                 onChange={set("checkIn")}
                 required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="block w-full min-w-0 max-w-full appearance-none bg-white text-left border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-medium text-gray-600 mb-1">Check-out *</label>
               <input
                 type="date"
@@ -218,34 +226,34 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
                 onChange={set("checkOut")}
                 required
                 min={form.checkIn}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="block w-full min-w-0 max-w-full appearance-none bg-white text-left border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
           </div>
 
           {/* Source & Status */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-medium text-gray-600 mb-1">Source</label>
               <select
                 value={form.source}
                 onChange={set("source")}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
               >
-                {(["DIRECT", "AIRBNB", "OFFLINE"] as BookingSource[]).map((s) => (
+                {(["DIRECT", "AIRBNB", "BOOKING", "AGODA", "TRAVELOKA", "OFFLINE"] as BookingSource[]).map((s) => (
                   <option key={s} value={s}>{SOURCE_META[s].label}</option>
                 ))}
               </select>
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
               <select
                 value={form.status}
                 onChange={set("status")}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
               >
-                {(["CONFIRMED", "PENDING", "CANCELLED"] as BookingStatus[]).map((s) => (
-                  <option key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase()}</option>
+                {(["CONFIRMED", "PENDING", "CANCELLED", "BLOCKED"] as BookingStatus[]).map((s) => (
+                  <option key={s} value={s}>{STATUS_LABEL[s]}</option>
                 ))}
               </select>
             </div>
@@ -304,14 +312,15 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
             />
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center justify-between pt-2">
+        </form>
+        {/* Actions — luôn hiện ở đáy (không bị thanh menu điện thoại che) */}
+        <div className="shrink-0 border-t border-gray-100 bg-white px-4 md:px-6 py-3 flex items-center justify-between gap-2" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
             {editBooking ? (
               <button
                 type="button"
                 onClick={handleDelete}
                 disabled={loading}
-                className="flex items-center gap-1.5 text-sm text-rose-600 hover:text-rose-700 font-medium disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2 py-2 text-sm text-rose-600 hover:text-rose-700 font-medium disabled:opacity-50"
               >
                 <Trash2 size={15} /> Delete
               </button>
@@ -328,14 +337,14 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
               </button>
               <button
                 type="submit"
+                form="booking-form"
                 disabled={loading}
-                className="px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                className="px-4 py-2.5 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
               >
                 {loading ? "Saving…" : editBooking ? "Save Changes" : "Create Booking"}
               </button>
             </div>
           </div>
-        </form>
       </div>
     </div>
   );

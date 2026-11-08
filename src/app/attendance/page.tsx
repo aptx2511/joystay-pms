@@ -35,18 +35,18 @@ function cellColor(hours: number): string {
   return "bg-orange-200 border-orange-400 text-orange-900";
 }
 
-function StatCard({ icon: Icon, label, value, sub, color }: {
-  icon: React.ElementType; label: string; value: string; sub?: string; color: string;
+function StatCard({ icon: Icon, label, value, sub, color, className }: {
+  icon: React.ElementType; label: string; value: string; sub?: string; color: string; className?: string;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">{label}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
-          {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+    <div className={`bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-5 min-w-0 ${className ?? ""}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] sm:text-xs text-gray-500 font-medium uppercase tracking-wide mb-1 leading-tight">{label}</p>
+          <p className="text-lg sm:text-2xl font-bold text-gray-900 leading-tight break-words tabular-nums">{value}</p>
+          {sub && <p className="text-[11px] sm:text-xs text-gray-400 mt-1 leading-snug break-words">{sub}</p>}
         </div>
-        <div className={`p-2.5 rounded-lg ${color}`}>
+        <div className={`hidden sm:block p-2.5 rounded-lg shrink-0 ${color}`}>
           <Icon size={18} className="text-white" />
         </div>
       </div>
@@ -182,9 +182,9 @@ export default function AttendancePage() {
         subtitle="Cô giúp việc · 75,000đ / tiếng · tối đa 24 tiếng / ngày"
       />
 
-      <div className="flex-1 overflow-auto p-5 space-y-5">
+      <div className="flex-1 overflow-auto p-3 sm:p-5 space-y-4 sm:space-y-5">
         {/* ── Stats ── */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           <StatCard
             icon={CalendarDays}
             label="Ngày làm"
@@ -205,11 +205,12 @@ export default function AttendancePage() {
             value={formatPrice(totalPay)}
             sub={`${totalHours} tiếng × 75,000đ`}
             color="bg-emerald-500"
+            className="col-span-2 sm:col-span-1"
           />
         </div>
 
         {/* ── Calendar ── */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-5">
           {/* Month nav */}
           <div className="flex items-center justify-between mb-5">
             <button
@@ -312,7 +313,7 @@ export default function AttendancePage() {
 
         {/* ── Detail list ── */}
         {sortedShifts.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-5">
             <h3 className="text-sm font-semibold text-gray-800 mb-4">
               Chi tiết — {format(currentMonth, "MMMM yyyy", { locale: vi })}
             </h3>

@@ -34,19 +34,19 @@ function pct(value: number, max: number) {
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 function StatCard({
-  icon: Icon, label, value, sub, color,
+  icon: Icon, label, value, sub, color, className,
 }: {
-  icon: React.ElementType; label: string; value: string; sub?: string; color: string;
+  icon: React.ElementType; label: string; value: string; sub?: string; color: string; className?: string;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">{label}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
-          {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+    <div className={`bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-5 min-w-0 ${className ?? ""}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] sm:text-xs text-gray-500 font-medium uppercase tracking-wide mb-1 leading-tight">{label}</p>
+          <p className="text-lg sm:text-2xl font-bold text-gray-900 leading-tight break-words tabular-nums">{value}</p>
+          {sub && <p className="text-[11px] sm:text-xs text-gray-400 mt-1 leading-snug break-words">{sub}</p>}
         </div>
-        <div className={`p-2.5 rounded-lg ${color}`}>
+        <div className={`hidden sm:block p-2.5 rounded-lg shrink-0 ${color}`}>
           <Icon size={18} className="text-white" />
         </div>
       </div>
@@ -105,7 +105,7 @@ export default function RevenuePage() {
         }
       />
 
-      <div className="flex-1 overflow-auto p-5 space-y-6">
+      <div className="flex-1 overflow-auto p-3 sm:p-5 space-y-4 sm:space-y-6">
         {loading && !data ? (
           <div className="flex items-center justify-center h-40 text-gray-400">Đang tải dữ liệu…</div>
         ) : !data ? null : (
@@ -122,7 +122,7 @@ export default function RevenuePage() {
             )}
 
             {/* ── Stat Cards ── */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <StatCard
                 icon={DollarSign}
                 label="Doanh thu (đã xác nhận)"
@@ -156,23 +156,23 @@ export default function RevenuePage() {
             </div>
 
             {/* ── Monthly Revenue Chart ── */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-5 min-w-0">
               <h3 className="text-sm font-semibold text-gray-800 mb-5">Doanh thu theo tháng</h3>
               <div className="space-y-3">
                 {data.byMonth.map((m) => (
-                  <div key={m.month} className="flex items-center gap-3">
-                    <span className="text-xs text-gray-500 w-20 shrink-0 text-right">{m.label}</span>
+                  <div key={m.month} className="flex items-center gap-2 sm:gap-3">
+                    <span className="text-xs text-gray-500 w-14 sm:w-20 shrink-0 text-right">{m.label}</span>
                     <div className="flex-1 bg-gray-100 rounded-full h-7 overflow-hidden relative">
                       <div
                         className="h-full bg-amber-400 rounded-full transition-all duration-500 flex items-center"
                         style={{ width: `${pct(m.revenue, maxMonthRevenue)}%`, minWidth: m.revenue > 0 ? "2px" : 0 }}
                       />
                     </div>
-                    <div className="text-right w-36 shrink-0">
-                      <span className="text-sm font-semibold text-gray-800">
+                    <div className="text-right w-28 sm:w-44 shrink-0">
+                      <span className="text-xs sm:text-sm font-semibold text-gray-800 tabular-nums">
                         {m.revenue > 0 ? formatPrice(m.revenue) : <span className="text-gray-300">—</span>}
                       </span>
-                      <span className="text-xs text-gray-400 ml-2">({m.bookings} booking)</span>
+                      <span className="block sm:inline text-[11px] sm:text-xs text-gray-400 sm:ml-2">({m.bookings} booking)</span>
                     </div>
                   </div>
                 ))}
@@ -181,7 +181,7 @@ export default function RevenuePage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               {/* ── Revenue by Room ── */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-5 min-w-0">
                 <h3 className="text-sm font-semibold text-gray-800 mb-5">Doanh thu theo phòng</h3>
                 {data.byRoom.length === 0 ? (
                   <p className="text-sm text-gray-400 text-center py-4">Chưa có dữ liệu</p>
@@ -221,7 +221,7 @@ export default function RevenuePage() {
               </div>
 
               {/* ── Revenue by Source ── */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-5 min-w-0">
                 <h3 className="text-sm font-semibold text-gray-800 mb-5">Doanh thu theo kênh</h3>
                 {data.bySource.every((s) => s.revenue === 0) ? (
                   <p className="text-sm text-gray-400 text-center py-4">Chưa có dữ liệu</p>
