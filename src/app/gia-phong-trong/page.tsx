@@ -7,27 +7,28 @@ import { formatPrice } from "@/lib/utils";
 
 interface Status { active: boolean; blocks: number; nights: number; since: string | null }
 interface Night {
-  date: string; weekday: number; weekend: boolean; lead: number; base: number; suggested: number; discountPct: number;
-  applied: number | null; airbnbPrice: number | null; airbnbTip: number | null; airbnbTipBase: number | null; airbnbTarget: number | null; airbnbDone: boolean;
+  date: string; weekday: number; weekend: boolean; lead: number; cat: Cat; orphan: boolean; base: number;
+  abNow: number; abNowKnown: boolean; abSuggested: number; abChangePct: number; suggested: number; why: string;
+  applied: number | null; airbnbPrice: number | null; airbnbTip: number | null; airbnbTarget: number | null; airbnbDone: boolean;
 }
 interface Gap {
-  roomId: string; roomLabel: string; from: string; to: string; nights: number; lead: number;
-  kind: "lastminute" | "orphan" | "long" | "normal"; nightsAdvice: Night[]; total: number; reasons: string[];
+  roomId: string; roomLabel: string; from: string; to: string; nights: number; lead: number; orphan: boolean;
+  nightsAdvice: Night[]; totalAb: number; reasons: string[];
   channels: { name: string; why: string; connected: boolean; listPrice?: number }[];
 }
 interface Advice {
-  month: string; today: string; potential: number; freeNights: number; tipsAt: string | null;
+  month: string; today: string; potentialAb: number; freeNights: number; tipsAt: string | null; floorPct: number;
   airbnbTodo: { roomId: string; roomLabel: string; date: string; current: number | null; target: number }[];
-  rooms: { roomId: string; roomLabel: string; occupancy: number; freeAhead: number }[];
+  rooms: { roomId: string; roomLabel: string; occupancy: number; freeAhead: number; ratio: number }[];
   gaps: Gap[];
 }
+type Cat = "satngay" | "saptoi" | "conxa";
 
 const WD = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
-const KIND: Record<Gap["kind"], { label: string; cls: string }> = {
-  lastminute: { label: "Sát ngày", cls: "bg-rose-100 text-rose-700" },
-  orphan: { label: "Trống lẻ", cls: "bg-violet-100 text-violet-700" },
-  long: { label: "Trống dài", cls: "bg-sky-100 text-sky-700" },
-  normal: { label: "Còn thời gian", cls: "bg-gray-100 text-gray-600" },
+const CAT: Record<Cat, { label: string; rule: string; chip: string; dot: string }> = {
+  satngay: { label: "Sát ngày", rule: "đêm còn ≤ 3 ngày nữa → giảm 10–15% để bán nốt", chip: "border-rose-300 bg-rose-50", dot: "bg-rose-500" },
+  saptoi: { label: "Sắp tới", rule: "còn 4–14 ngày → giảm nhẹ 3–7% hoặc theo Airbnb gợi ý", chip: "border-amber-300 bg-amber-50", dot: "bg-amber-500" },
+  conxa: { label: "Còn xa", rule: "còn > 14 ngày → giữ giá (chỉ chỉnh nếu Airbnb gợi ý lệch ≥ 10%)", chip: "border-gray-200 bg-white", dot: "bg-gray-400" },
 };
 const k = (n: number) => `${Math.round(n / 1000)}k`;
 const ddmm = (s: string) => `${s.slice(8, 10)}/${s.slice(5, 7)}`;
@@ -66,12 +67,14 @@ export default function VacancyPricingPage() {
 
   // ── Bộ lọc & áp giá hàng loạt ──
   const [fRooms, setFRooms] = useState<string[]>([]);           // rỗng = tất cả phòng
-  const [fKinds, setFKinds] = useState<Gap["kind"][]>([]);      // rỗng = tất cả loại
+  const [fCats, setFCats] = useState<Cat[]>([]);               // rỗng = mọi nhóm
+  const [fOrphan, setFOrphan] = useState(false);                // chỉ đêm lẻ
+  const [showHelp, setShowHelp] = useState(false);
   const [fFrom, setFFrom] = useState("");
   const [fTo, setFTo] = useState("");
   const [fDays, setFDays] = useState<"all" | "weekday" | "weekend">("all");
   const [showApplied, setShowApplied] = useState(false);       // mặc định ẩn đêm đã áp dụng
-  const [method, setMethod] = useState<"rule" | "tip" | "pct">("rule");
+  const [method, setMethod] = useState<"rule" | "tip" | "pct">("rule"); // rule = cột Đề xuất
   const [pct, setPct] = useState(-10);
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
 
@@ -79,16 +82,16 @@ export default function VacancyPricingPage() {
   const visible = useMemo(() => {
     if (!data) return [];
     return data.gaps
-      .filter((g) => (!fRooms.length || fRooms.includes(g.roomId)) && (!fKinds.length || fKinds.includes(g.kind)))
+      .filter((g) => (!fRooms.length || fRooms.includes(g.roomId)) && (!fOrphan || g.orphan))
       .map((g) => ({
         ...g,
         nightsAdvice: g.nightsAdvice.filter((n) =>
-          (showApplied || n.applied == null) &&
+          (showApplied || n.applied == null) && (!fCats.length || fCats.includes(n.cat)) &&
           (!fFrom || n.date >= fFrom) && (!fTo || n.date <= fTo) &&
           (fDays === "all" || (fDays === "weekend" ? n.weekend : !n.weekend))),
       }))
       .filter((g) => g.nightsAdvice.length > 0);
-  }, [data, fRooms, fKinds, fFrom, fTo, fDays, showApplied]);
+  }, [data, fRooms, fCats, fOrphan, fFrom, fTo, fDays, showApplied]);
   const appliedCount = useMemo(() => (data ? data.gaps.reduce((s, g) => s + g.nightsAdvice.filter((n) => n.applied != null).length, 0) : 0), [data]);
   const targets = visible.flatMap((g) => g.nightsAdvice.filter((n) => n.applied == null).map((n) => ({ g, n })));
   const appliedInView = visible.flatMap((g) => g.nightsAdvice.filter((n) => n.applied != null).map((n) => ({ g, n })));
@@ -97,19 +100,19 @@ export default function VacancyPricingPage() {
   async function bulk(kind: "apply" | "clear") {
     let items: object[] = [];
     if (kind === "clear") items = appliedInView.map(({ g, n }) => ({ roomId: g.roomId, date: n.date }));
-    else if (method === "rule") items = targets.map(({ g, n }) => ({ roomId: g.roomId, date: n.date, price: n.suggested, source: "RULE" }));
+    else if (method === "rule") items = targets.map(({ g, n }) => ({ roomId: g.roomId, date: n.date, airbnbTarget: n.abSuggested, source: "RULE" }));
     else if (method === "tip") items = targets.filter(({ n }) => n.airbnbTip != null).map(({ g, n }) => ({ roomId: g.roomId, date: n.date, useTip: true }));
-    else items = targets.map(({ g, n }) => ({ roomId: g.roomId, date: n.date, price: r10k(n.base * (1 + pct / 100)), source: "MANUAL" }));
+    else items = targets.map(({ g, n }) => ({ roomId: g.roomId, date: n.date, airbnbTarget: r10k(n.abNow * (1 + pct / 100)), source: "MANUAL" }));
     if (!items.length) { setBulkMsg(method === "tip" && kind === "apply" ? "Không có đêm nào trong bộ lọc có gợi ý giá Airbnb." : "Không có đêm nào để xử lý."); return; }
     const label = kind === "clear" ? `Đưa ${items.length} đêm về giá gốc?` :
-      `Áp dụng ${method === "rule" ? "giá gợi ý PMS" : method === "tip" ? "giá Airbnb gợi ý" : `giá gốc ${pct > 0 ? "+" : ""}${pct}%`} cho ${items.length} đêm đang lọc?`;
+      `Áp dụng ${method === "rule" ? "giá Đề xuất" : method === "tip" ? "giá Airbnb gợi ý" : `giá Airbnb đang ${pct > 0 ? "+" : ""}${pct}%`} cho ${items.length} đêm đang lọc?\n\nCác đêm này sẽ vào danh sách “Cần chỉnh trên Airbnb”; JoyBot/website dùng giá trực tiếp tương ứng ngay.`;
     if (!confirm(label)) return;
     setSaving("bulk"); setBulkMsg(null);
     try {
       for (let i = 0; i < items.length; i += 40) {
         await fetch("/api/rates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: kind, items: items.slice(i, i + 40) }) });
       }
-      setBulkMsg(kind === "clear" ? `Đã đưa ${items.length} đêm về giá gốc.` : `Đã áp dụng ${items.length} đêm — các đêm này đã được ẩn khỏi danh sách.`);
+      setBulkMsg(kind === "clear" ? `Đã bỏ giá áp dụng ${items.length} đêm.` : `Đã áp dụng ${items.length} đêm — các đêm này đã được ẩn khỏi danh sách.`);
       await loadAdvice();
     } finally {
       setSaving(null);
@@ -125,12 +128,12 @@ export default function VacancyPricingPage() {
     }
   }
   function editNight(g: Gap, n: Night) {
-    const cur = n.applied ?? n.suggested;
-    const v = prompt(`Giá đêm ${WD[n.weekday]} ${ddmm(n.date)} — ${g.roomLabel}\n(giá gốc ${n.base.toLocaleString("vi-VN")}đ · gợi ý ${n.suggested.toLocaleString("vi-VN")}đ${n.airbnbTip ? ` · Airbnb gợi ý ${n.airbnbTip.toLocaleString("vi-VN")}đ` : ""})\nNhập giá mới (để trống = về giá gốc):`, String(cur));
+    const cur = n.airbnbTarget ?? n.abSuggested;
+    const v = prompt(`Giá AIRBNB đêm ${WD[n.weekday]} ${ddmm(n.date)} — ${g.roomLabel}\nĐang ${n.abNow.toLocaleString("vi-VN")}đ · Đề xuất ${n.abSuggested.toLocaleString("vi-VN")}đ${n.airbnbTip ? ` · Airbnb gợi ý ${n.airbnbTip.toLocaleString("vi-VN")}đ` : ""}\nNhập giá Airbnb muốn đặt (để trống = bỏ áp dụng):`, String(cur));
     if (v === null) return;
     const num = Number(v.replace(/[^\d]/g, ""));
     if (!v.trim() || !num) rates("clear", [{ roomId: g.roomId, date: n.date }], g.roomId + n.date);
-    else rates("apply", [{ roomId: g.roomId, date: n.date, price: num, source: "MANUAL" }], g.roomId + n.date);
+    else rates("apply", [{ roomId: g.roomId, date: n.date, airbnbTarget: num, source: "MANUAL" }], g.roomId + n.date);
   }
 
   async function act(action: "lock" | "unlock") {
@@ -200,7 +203,7 @@ export default function VacancyPricingPage() {
             <>
               <div className="grid grid-cols-2 gap-2 mt-3">
                 <div className="rounded-lg bg-gray-50 p-3 min-w-0"><p className="text-[11px] text-gray-500 uppercase">Đêm còn trống (từ hôm nay)</p><p className="text-lg font-bold">{data.freeNights}</p></div>
-                <div className="rounded-lg bg-gray-50 p-3 min-w-0"><p className="text-[11px] text-gray-500 uppercase">Nếu bán hết theo giá gợi ý</p><p className="text-lg font-bold break-words">{formatPrice(data.potential)}</p></div>
+                <div className="rounded-lg bg-gray-50 p-3 min-w-0"><p className="text-[11px] text-gray-500 uppercase">Bán hết theo giá Đề xuất (Airbnb)</p><p className="text-lg font-bold break-words">{formatPrice(data.potentialAb)}</p></div>
               </div>
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {data.rooms.map((r) => (
@@ -208,6 +211,25 @@ export default function VacancyPricingPage() {
                     {r.roomLabel.split(" · ")[0]}: lấp {r.occupancy}% · trống {r.freeAhead} đêm
                   </span>
                 ))}
+              </div>
+
+              {/* ── Cách đọc ── */}
+              <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50/60 p-3">
+                <button onClick={() => setShowHelp(!showHelp)} className="text-sm font-semibold text-sky-900 w-full text-left">
+                  {showHelp ? "▾" : "▸"} Cách đọc gợi ý (bấm để {showHelp ? "ẩn" : "xem"})
+                </button>
+                {showHelp && (
+                  <div className="text-xs text-gray-700 mt-2 space-y-1.5 leading-relaxed">
+                    <p>Tất cả giá ở đây là <b>giá trên Airbnb</b> (kênh ~90% khách): <b>Đang</b> = giá đang niêm yết trên Airbnb, <b>Đề xuất</b> = giá nên đặt.</p>
+                    <p>Mỗi <b>đêm</b> được xếp nhóm theo số ngày còn lại tới đêm đó (không phải theo cả khoảng trống):</p>
+                    {(Object.keys(CAT) as Cat[]).map((c) => (
+                      <p key={c} className="flex gap-1.5"><span className={`w-2 h-2 rounded-full mt-1 shrink-0 ${CAT[c].dot}`} /><span><b>{CAT[c].label}</b>: {CAT[c].rule}.</span></p>
+                    ))}
+                    <p><b>Đêm lẻ</b>: khoảng trống ≤ 2 đêm kẹp giữa 2 booking (khó bán) → giảm thêm 5%.</p>
+                    <p>Nếu có <b>Airbnb gợi ý</b>, đề xuất bám theo đó; không bao giờ thấp hơn {data.floorPct}% giá đang. Cuối tuần (T6, T7) giảm một nửa. Phòng lấp &lt; 40% tháng giảm thêm 3%.</p>
+                    <p>Bấm <b>Áp dụng</b> → đêm đó vào danh sách “Cần chỉnh trên Airbnb” (bạn chỉnh tay trên Airbnb rồi bấm “Đã chỉnh xong”), và JoyBot/website báo giá trực tiếp tương ứng ngay.</p>
+                  </div>
+                )}
               </div>
               {status?.active && (
                 <p className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 flex items-center gap-2">
@@ -260,10 +282,13 @@ export default function VacancyPricingPage() {
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {(Object.keys(KIND) as Gap["kind"][]).map((kd) => (
-                    <button key={kd} onClick={() => setFKinds(toggle(fKinds, kd))}
-                      className={`text-xs px-2.5 py-1 rounded-full border ${fKinds.includes(kd) ? "bg-amber-500 text-white border-amber-500" : "bg-white border-gray-300"}`}>{KIND[kd].label}</button>
+                  {(Object.keys(CAT) as Cat[]).map((c) => (
+                    <button key={c} onClick={() => setFCats(toggle(fCats, c))}
+                      className={`text-xs px-2.5 py-1 rounded-full border flex items-center gap-1 ${fCats.includes(c) ? "bg-amber-500 text-white border-amber-500" : "bg-white border-gray-300"}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${CAT[c].dot}`} />{CAT[c].label}
+                    </button>
                   ))}
+                  <button onClick={() => setFOrphan(!fOrphan)} className={`text-xs px-2.5 py-1 rounded-full border ${fOrphan ? "bg-violet-600 text-white border-violet-600" : "bg-white border-gray-300"}`}>Chỉ đêm lẻ</button>
                   <span className="w-px bg-gray-300 mx-0.5" />
                   {([["all", "Mọi đêm"], ["weekday", "Ngày thường"], ["weekend", "T6–T7"]] as const).map(([v, l]) => (
                     <button key={v} onClick={() => setFDays(v)} className={`text-xs px-2.5 py-1 rounded-full border ${fDays === v ? "bg-gray-900 text-white border-gray-900" : "bg-white border-gray-300"}`}>{l}</button>
@@ -274,8 +299,8 @@ export default function VacancyPricingPage() {
                   <label className="text-[11px] text-gray-500 min-w-0">Đến ngày<input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} className="block w-full min-w-0 mt-0.5 border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white" /></label>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-gray-600">Cách tính:</span>
-                  {([["rule", "Gợi ý PMS"], ["tip", "Airbnb gợi ý"], ["pct", "% giá gốc"]] as const).map(([v, l]) => (
+                  <span className="text-xs text-gray-600">Đặt giá Airbnb theo:</span>
+                  {([["rule", "Đề xuất"], ["tip", "Airbnb gợi ý"], ["pct", "% so với giá đang"]] as const).map(([v, l]) => (
                     <button key={v} onClick={() => setMethod(v)} className={`text-xs px-2.5 py-1 rounded-full border ${method === v ? "bg-gray-900 text-white border-gray-900" : "bg-white border-gray-300"}`}>{l}</button>
                   ))}
                   {method === "pct" && (
@@ -291,11 +316,11 @@ export default function VacancyPricingPage() {
                   </button>
                   {showApplied && appliedInView.length > 0 && (
                     <button disabled={saving !== null} onClick={() => bulk("clear")} className="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-700 font-semibold disabled:opacity-40">
-                      Về giá gốc {appliedInView.length} đêm
+                      Bỏ áp dụng {appliedInView.length} đêm
                     </button>
                   )}
-                  {(fRooms.length || fKinds.length || fFrom || fTo || fDays !== "all") ? (
-                    <button onClick={() => { setFRooms([]); setFKinds([]); setFFrom(""); setFTo(""); setFDays("all"); }} className="text-xs text-gray-500 underline">Bỏ lọc</button>
+                  {(fRooms.length || fCats.length || fOrphan || fFrom || fTo || fDays !== "all") ? (
+                    <button onClick={() => { setFRooms([]); setFCats([]); setFOrphan(false); setFFrom(""); setFTo(""); setFDays("all"); }} className="text-xs text-gray-500 underline">Bỏ lọc</button>
                   ) : null}
                 </div>
                 <label className="flex items-center gap-2 text-xs text-gray-600">
@@ -307,64 +332,75 @@ export default function VacancyPricingPage() {
 
               <div className="space-y-3 mt-3">
                 {visible.length === 0 && data.gaps.length > 0 && <p className="text-sm text-gray-500">Không còn đêm nào khớp bộ lọc{!showApplied && appliedCount ? " (các đêm đã áp dụng đang được ẩn)" : ""}.</p>}
-                {visible.map((g) => (
+                {visible.map((g) => {
+                  const cats = [...new Set(g.nightsAdvice.map((n) => n.cat))];
+                  return (
                   <div key={g.roomId + g.from} className="border border-gray-200 rounded-xl p-3 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <span className="font-semibold text-sm text-gray-900">{g.roomLabel}</span>
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${KIND[g.kind].cls}`}>{KIND[g.kind].label}</span>
+                      {cats.map((c) => <span key={c} className="text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700 flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${CAT[c].dot}`} />{CAT[c].label}</span>)}
+                      {g.orphan && <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700">Đêm lẻ</span>}
                     </div>
-                    <p className="text-sm text-gray-600 mt-0.5">{ddmm(g.from)} → {ddmm(g.to)} · {g.nights} đêm{g.nightsAdvice.length !== g.nights ? ` (đang hiện ${g.nightsAdvice.length})` : ""} · tổng gợi ý <b>{formatPrice(g.total)}</b></p>
+                    <p className="text-sm text-gray-600 mt-0.5">Trống {ddmm(g.from)} → {ddmm(g.to)} · {g.nights} đêm{g.nightsAdvice.length !== g.nights ? ` (đang hiện ${g.nightsAdvice.length})` : ""}</p>
 
                     <div className="flex gap-1.5 overflow-x-auto mt-2 pb-1">
-                      {g.nightsAdvice.map((n) => (
-                        <button key={n.date} onClick={() => editNight(g, n)}
-                          className={`shrink-0 rounded-lg border px-2 py-1.5 text-center min-w-[84px] ${n.applied != null ? "border-emerald-400 bg-emerald-50" : n.weekend ? "border-amber-300 bg-amber-50" : "border-gray-200"}`}>
-                          <p className="text-[11px] text-gray-500">{WD[n.weekday]} {ddmm(n.date)}</p>
-                          {n.applied != null ? (
-                            <p className="text-sm font-semibold tabular-nums text-emerald-700">{k(n.applied)} ✓</p>
+                      {g.nightsAdvice.map((n) => {
+                        const done = n.applied != null;
+                        const set = n.airbnbTarget;
+                        const same = n.abSuggested === n.abNow;
+                        return (
+                        <button key={n.date} onClick={() => editNight(g, n)} title={n.why}
+                          className={`shrink-0 rounded-lg border px-2 py-1.5 text-left min-w-[92px] ${done ? "border-emerald-400 bg-emerald-50" : CAT[n.cat].chip}`}>
+                          <p className="text-[11px] text-gray-500 flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${CAT[n.cat].dot}`} />{WD[n.weekday]} {ddmm(n.date)}</p>
+                          <p className="text-[10px] text-gray-400 tabular-nums">đang {k(n.abNow)}{n.abNowKnown ? "" : "*"}</p>
+                          {done ? (
+                            <p className="text-sm font-semibold tabular-nums text-emerald-700">{set != null ? k(set) : "—"} ✓</p>
                           ) : (
-                            <p className="text-sm font-semibold tabular-nums">{k(n.suggested)}</p>
+                            <p className="text-sm font-semibold tabular-nums">{same ? <span className="text-gray-500">giữ</span> : k(n.abSuggested)}
+                              {!same && <span className={`text-[10px] ml-1 ${n.abChangePct < 0 ? "text-rose-600" : "text-emerald-600"}`}>{n.abChangePct > 0 ? "+" : ""}{n.abChangePct}%</span>}</p>
                           )}
-                          <p className="text-[10px] text-gray-400 tabular-nums">{n.applied != null ? `gợi ý ${k(n.suggested)}` : `${n.discountPct > 0 ? `−${n.discountPct}% · ` : ""}gốc ${k(n.base)}`}</p>
                           {n.airbnbTip != null && <p className="text-[10px] text-rose-500 tabular-nums">AB gợi ý {k(n.airbnbTip)}</p>}
-                          {n.airbnbPrice != null && <p className="text-[10px] text-gray-400 tabular-nums">AB đang {k(n.airbnbPrice)}</p>}
                         </button>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      <button disabled={saving !== null} onClick={() => rates("apply", g.nightsAdvice.map((n) => ({ roomId: g.roomId, date: n.date, price: n.suggested, source: "RULE" })), g.roomId + g.from)}
+                      <button disabled={saving !== null} onClick={() => rates("apply", g.nightsAdvice.filter((n) => n.applied == null).map((n) => ({ roomId: g.roomId, date: n.date, airbnbTarget: n.abSuggested, source: "RULE" })), g.roomId + g.from)}
                         className="text-xs px-2.5 py-1.5 rounded-lg bg-amber-500 text-white font-semibold disabled:opacity-50">
-                        {saving === g.roomId + g.from ? "Đang lưu…" : "Áp dụng giá gợi ý"}
+                        {saving === g.roomId + g.from ? "Đang lưu…" : "Áp dụng Đề xuất"}
                       </button>
-                      {g.nightsAdvice.some((n) => n.airbnbTip != null) && (
-                        <button disabled={saving !== null} onClick={() => rates("apply", g.nightsAdvice.filter((n) => n.airbnbTip != null).map((n) => ({ roomId: g.roomId, date: n.date, useTip: true })), g.roomId + g.from + "tip")}
+                      {g.nightsAdvice.some((n) => n.airbnbTip != null && n.applied == null) && (
+                        <button disabled={saving !== null} onClick={() => rates("apply", g.nightsAdvice.filter((n) => n.airbnbTip != null && n.applied == null).map((n) => ({ roomId: g.roomId, date: n.date, useTip: true })), g.roomId + g.from + "tip")}
                           className="text-xs px-2.5 py-1.5 rounded-lg bg-rose-500 text-white font-semibold disabled:opacity-50">Theo Airbnb gợi ý</button>
                       )}
                       {g.nightsAdvice.some((n) => n.applied != null) && (
-                        <button disabled={saving !== null} onClick={() => rates("clear", g.nightsAdvice.map((n) => ({ roomId: g.roomId, date: n.date })), g.roomId + g.from + "clr")}
-                          className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-700 font-semibold disabled:opacity-50">Về giá gốc</button>
+                        <button disabled={saving !== null} onClick={() => rates("clear", g.nightsAdvice.filter((n) => n.applied != null).map((n) => ({ roomId: g.roomId, date: n.date })), g.roomId + g.from + "clr")}
+                          className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-700 font-semibold disabled:opacity-50">Bỏ áp dụng</button>
                       )}
-                      <span className="text-[11px] text-gray-400 self-center">Chạm 1 đêm để sửa tay</span>
+                      <span className="text-[11px] text-gray-400 self-center">Chạm 1 đêm để nhập giá Airbnb tay</span>
                     </div>
 
                     <ul className="mt-2 space-y-0.5">
                       {g.reasons.map((r) => <li key={r} className="text-xs text-gray-600">• {r}</li>)}
                     </ul>
-                    <div className="mt-2 space-y-1">
-                      {g.channels.map((c) => (
-                        <div key={c.name} className="text-xs flex gap-1.5">
-                          <span className={`shrink-0 font-semibold ${c.connected ? "text-emerald-700" : "text-gray-400"}`}>{c.connected ? "✓" : "○"} {c.name}{c.listPrice ? ` ~${Math.round(c.listPrice / 1000)}k/đêm` : ""}</span>
-                          <span className="text-gray-500 min-w-0">— {c.why}{!c.connected ? " (chưa kết nối lịch)" : ""}</span>
-                        </div>
-                      ))}
-                    </div>
+                    <details className="mt-1.5">
+                      <summary className="text-xs text-gray-500 cursor-pointer">Kênh bán & giá niêm yết tương ứng</summary>
+                      <div className="mt-1 space-y-1">
+                        {g.channels.map((c) => (
+                          <div key={c.name} className="text-xs flex gap-1.5">
+                            <span className={`shrink-0 font-semibold ${c.connected ? "text-emerald-700" : "text-gray-400"}`}>{c.connected ? "✓" : "○"} {c.name}{c.listPrice ? ` ~${Math.round(c.listPrice / 1000)}k/đêm` : ""}</span>
+                            <span className="text-gray-500 min-w-0">— {c.why}{!c.connected ? " (chưa kết nối lịch)" : ""}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               <p className="text-[11px] text-gray-400 mt-4 leading-snug">
-                Gợi ý theo quy tắc: giá gốc phòng (Settings) · giảm theo số ngày còn lại (≤1 ngày −25%, ≤3 −15%, ≤7 −10%, ≤14 −5%) · trống lẻ kẹp giữa 2 booking −10% · phòng lấp &lt;40% −5% · cuối tuần giảm một nửa · sàn {Math.round(60)}% giá gốc.
-                Giá kênh khác đã cộng bù phí để thực nhận ngang Airbnb. Bấm “Áp dụng” → JoyBot dùng ngay; Airbnb/Booking/Agoda: chỉnh theo danh sách “Cần chỉnh trên Airbnb” (PMS chưa tự đẩy giá lên OTA).
+                * = chưa đọc được giá Airbnb của đêm đó, đang ước tính theo giá gốc × tỉ lệ Airbnb của phòng. Di chuột/giữ vào 1 đêm để xem lý do đề xuất.
               </p>
             </>
           )}

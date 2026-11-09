@@ -29,7 +29,7 @@ export async function airbnbRatio(room: RoomPrice): Promise<number> {
   return xs.length ? xs[Math.floor(xs.length / 2)] : 1;
 }
 
-export interface ApplyItem { roomId: string; date: string; price?: number | null; useTip?: boolean; source?: string }
+export interface ApplyItem { roomId: string; date: string; price?: number | null; airbnbTarget?: number | null; useTip?: boolean; source?: string }
 
 /** Áp giá cho các đêm: cập nhật price (kênh trực tiếp) + airbnbTarget (cần đặt trên Airbnb) */
 export async function applyRates(items: ApplyItem[]) {
@@ -49,6 +49,10 @@ export async function applyRates(items: ApplyItem[]) {
     if (it.useTip && existing?.airbnbTip) {
       target = existing.airbnbTip;
       price = r10k(existing.airbnbTip / k);
+    } else if (it.airbnbTarget != null) {
+      // nhập theo thang giá Airbnb → suy ra giá trực tiếp
+      target = r10k(it.airbnbTarget);
+      price = price ?? r10k(it.airbnbTarget / k);
     } else if (price != null) {
       target = r10k(price * k);
     }
