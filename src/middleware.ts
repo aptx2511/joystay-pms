@@ -18,6 +18,7 @@ const PUBLIC_PREFIXES = [
   "/ical/",               // OTA đọc lịch PMS
   "/api/ical/export/",
   "/api/availability",    // website kiểm tra phòng trống
+  "/api/quote",          // website/JoyBot lấy giá theo ngày
   "/t/",                  // trang việc dọn cho lao công (khoá bằng token trong link)
   "/api/hk/t/",
   "/s/",                 // cổng khách /s/<mã bí mật>

@@ -26,6 +26,7 @@ model Room {
   createdAt     DateTime  @default(now())
   bookings      Booking[]
   cleaningTasks CleaningTask[]
+  rates         RoomRate[]
 }
 
 // ── Housekeeping (Ops 2.0 — Module 1) ─────────────────────────────────────────
@@ -160,4 +161,25 @@ model StayPortal {
   updatedAt     DateTime  @updatedAt
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+
+/// Giá theo ngày (Ops 2.0 — Giá & phòng trống). Đêm = date (UTC 00:00 của ngày VN).
+model RoomRate {
+  id           String    @id @default(cuid())
+  roomId       String
+  date         DateTime
+  price        Float?    // giá áp dụng cho kênh trực tiếp (website, JoyBot) — null = dùng giá gốc phòng
+  airbnbPrice  Float?    // giá đang đặt trên Airbnb (đọc về từ lịch Airbnb)
+  airbnbTip    Float?    // "Gợi ý giá" của Airbnb cho đêm này
+  tipAt        DateTime? // lúc đọc gợi ý Airbnb
+  airbnbTarget Float?    // giá cần đặt trên Airbnb (sau khi bấm Áp dụng)
+  airbnbDoneAt DateTime? // chủ đã chỉnh xong trên Airbnb
+  appliedAt    DateTime?
+  source       String?   // RULE | AIRBNB_TIP | MANUAL
+  updatedAt    DateTime  @updatedAt
+  room         Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, date])
+  @@index([date])
 }

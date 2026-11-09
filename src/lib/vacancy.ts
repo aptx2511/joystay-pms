@@ -6,6 +6,7 @@
 import { prisma } from "@/lib/prisma";
 import { CHANNEL_FEE } from "@/types";
 import { DAY, dayKey, vnToday } from "@/lib/housekeeping";
+import { airbnbRatio, ratesBetween } from "@/lib/rates";
 
 export const EMERGENCY_TAG = "[KHOA_KHAN]";
 export const EMERGENCY_NAME = "🚨 Khoá khẩn";
@@ -83,7 +84,10 @@ const FLOOR = Number(process.env.PRICE_FLOOR_RATIO ?? "0.6"); // không bao gi�
 const round1k = (n: number) => Math.round(n / 10_000) * 10_000;
 const isWeekend = (d: Date) => [5, 6].includes(d.getUTCDay()); // đêm thứ 6, thứ 7
 
-export interface NightAdvice { date: string; weekday: number; weekend: boolean; lead: number; base: number; suggested: number; discountPct: number }
+export interface NightAdvice {
+  date: string; weekday: number; weekend: boolean; lead: number; base: number; suggested: number; discountPct: number;
+  applied: number | null; airbnbPrice: number | null; airbnbTip: number | null; airbnbTipBase: number | null; airbnbTarget: number | null; airbnbDone: boolean;
+}
 export interface GapAdvice {
   roomId: string; roomLabel: string; from: string; to: string; nights: number; lead: number;
   kind: "lastminute" | "orphan" | "long" | "normal";
@@ -104,6 +108,11 @@ export async function pricingAdvice(month?: string) {
   const all = await findGaps(monthStart, monthEnd);
   const freeByRoom = new Map<string, number>();
   for (const g of all.gaps) freeByRoom.set(g.roomId, (freeByRoom.get(g.roomId) ?? 0) + g.nights);
+
+  const rates = start < monthEnd ? await ratesBetween(start, monthEnd) : [];
+  const rateOf = (roomId: string, t: number) => rates.find((x) => x.roomId === roomId && x.date.getTime() === t);
+  const ratios = new Map<string, number>();
+  for (const r of rooms) ratios.set(r.id, await airbnbRatio(r));
 
   const out: GapAdvice[] = [];
   for (const g of gaps) {
@@ -126,7 +135,13 @@ export async function pricingAdvice(month?: string) {
       if (occ < 0.4 && nl <= 14) disc += 5;
       if (wk) disc = Math.round(disc / 2);
       const suggested = Math.max(round1k(base * (1 - disc / 100)), round1k(base * FLOOR));
-      nightsAdvice.push({ date: dayKey(d), weekday: d.getUTCDay(), weekend: wk, lead: nl, base, suggested, discountPct: Math.round((1 - suggested / base) * 100) });
+      const rt = rateOf(r.id, t);
+      const k = ratios.get(r.id) ?? 1;
+      nightsAdvice.push({
+        date: dayKey(d), weekday: d.getUTCDay(), weekend: wk, lead: nl, base, suggested, discountPct: Math.round((1 - suggested / base) * 100),
+        applied: rt?.price ?? null, airbnbPrice: rt?.airbnbPrice ?? null, airbnbTip: rt?.airbnbTip ?? null,
+        airbnbTipBase: rt?.airbnbTip ? round1k(rt.airbnbTip / k) : null, airbnbTarget: rt?.airbnbTarget ?? null, airbnbDone: Boolean(rt?.airbnbDoneAt),
+      });
     }
     if (lead <= 3) reasons.push(`Còn ${Math.max(lead, 0)} ngày là tới — giảm sâu để bán sát ngày (đêm trống là mất trắng).`);
     else if (lead <= 14) reasons.push(`Còn ${lead} ngày — giảm nhẹ để kéo khách đặt sớm.`);
@@ -135,6 +150,12 @@ export async function pricingAdvice(month?: string) {
     if (long) reasons.push(`Trống dài ${g.nights} đêm — bật/đẩy giảm giá theo tuần ${r.weeklyDiscount ? `(đang ${r.weeklyDiscount}%)` : "(gợi ý 10–15%)"} để hút khách ở dài.`);
     if (occ < 0.4) reasons.push(`Phòng mới lấp đầy ${Math.round(occ * 100)}% tháng này — ưu tiên lấp phòng hơn giữ giá.`);
     if (nightsAdvice.some((n) => n.weekend)) reasons.push("Đêm thứ 6, thứ 7 giảm ít hơn (khách cuối tuần ít nhạy giá).");
+    const tips = nightsAdvice.filter((n) => n.airbnbTipBase != null);
+    if (tips.length) {
+      const diff = tips.reduce((s, n) => s + (n.airbnbTipBase! - n.suggested) / n.suggested, 0) / tips.length;
+      if (Math.abs(diff) >= 0.12) reasons.push(`Airbnb gợi ý ${diff > 0 ? "CAO" : "THẤP"} hơn giá gợi ý của PMS ~${Math.round(Math.abs(diff) * 100)}% (theo nhu cầu & chỗ ở tương tự quanh khu) — cân nhắc ${diff > 0 ? "giữ giá cao hơn" : "hạ thêm"}.`);
+      else reasons.push("Airbnb gợi ý gần khớp giá gợi ý của PMS.");
+    }
 
     const total = nightsAdvice.reduce((s, n) => s + n.suggested, 0);
     const avg = total / g.nights;
@@ -163,7 +184,18 @@ export async function pricingAdvice(month?: string) {
     const freeAhead = gaps.filter((g) => g.roomId === r.id).reduce((s, g) => s + g.nights, 0);
     return { roomId: r.id, roomLabel: r.roomNumber ? `${r.roomNumber} · ${r.name}` : r.name, occupancy: Math.round((1 - free / totalNightsMonth) * 100), freeAhead };
   });
+  // Danh sách "cần chỉnh trên Airbnb": đã bấm Áp dụng nhưng chưa xác nhận đã chỉnh, đêm còn trống
+  const freeKey = new Set(out.flatMap((g) => g.nightsAdvice.map((n) => `${g.roomId}|${n.date}`)));
+  const airbnbTodo = rates
+    .filter((x) => x.airbnbTarget != null && !x.airbnbDoneAt && freeKey.has(`${x.roomId}|${dayKey(x.date)}`) && Math.abs((x.airbnbPrice ?? 0) - x.airbnbTarget) >= 15_000)
+    .map((x) => {
+      const r = rooms.find((rr) => rr.id === x.roomId)!;
+      return { roomId: x.roomId, roomLabel: r.roomNumber ? `${r.roomNumber} · ${r.name}` : r.name, date: dayKey(x.date), current: x.airbnbPrice, target: x.airbnbTarget! };
+    });
+  const tipsAt = rates.reduce<Date | null>((a, x) => (x.tipAt && (!a || x.tipAt > a) ? x.tipAt : a), null);
+
   return {
+    airbnbTodo, tipsAt,
     month: `${y}-${String(m).padStart(2, "0")}`,
     today: dayKey(today),
     rooms: roomsSummary,
