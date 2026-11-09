@@ -10,12 +10,14 @@ import {
   Sparkles,
   BedDouble,
   RefreshCw,
+  Tag,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/",           label: "Dashboard",  icon: LayoutDashboard },
   { href: "/bookings",   label: "Bookings",   icon: CalendarDays    },
   { href: "/revenue",    label: "Doanh thu",  icon: TrendingUp      },
+  { href: "/gia-phong-trong", label: "Giá/Trống", icon: Tag       },
   { href: "/luu-tru",    label: "Lưu trú",     icon: BedDouble       },
   { href: "/housekeeping", label: "Dọn phòng", icon: Sparkles       },
   { href: "/attendance", label: "Chấm công",  icon: ClipboardCheck  },
@@ -31,19 +33,19 @@ export default function BottomNav() {
       className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-slate-900 border-t border-slate-700"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="flex">
+      <div className="flex overflow-x-auto">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
             <Link
               key={href}
               href={href}
-              className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+              className={`flex-1 min-w-[48px] flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
                 active ? "text-amber-400" : "text-slate-400 active:text-slate-200"
               }`}
             >
-              <Icon size={22} strokeWidth={active ? 2.5 : 1.75} />
-              <span className="text-[9px] font-medium leading-none">{label}</span>
+              <Icon size={20} strokeWidth={active ? 2.5 : 1.75} />
+              <span className="text-[9px] font-medium leading-none whitespace-nowrap">{label}</span>
             </Link>
           );
         })}
