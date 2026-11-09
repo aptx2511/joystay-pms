@@ -242,7 +242,11 @@ export default function VacancyPricingPage() {
                 <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-rose-800">Cần chỉnh trên Airbnb ({data.airbnbTodo.length} đêm)</p>
-                    <a href="https://www.airbnb.com.vn/multicalendar" target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg bg-white border border-rose-300 text-rose-700 font-semibold shrink-0">Mở lịch Airbnb</a>
+                    <div className="flex gap-1.5 shrink-0">
+                      <button disabled={saving !== null} onClick={() => { if (confirm(`Xoá cả ${data.airbnbTodo.length} đêm khỏi danh sách cần chỉnh?\n(Bỏ giá đã áp dụng, các đêm này quay lại phần gợi ý bên dưới.)`)) rates("clear", data.airbnbTodo.map((t) => ({ roomId: t.roomId, date: t.date })), "clrall"); }}
+                        className="text-xs px-2.5 py-1.5 rounded-lg bg-white border border-gray-300 text-gray-700 font-semibold disabled:opacity-50">{saving === "clrall" ? "Đang xoá…" : "Xoá hết"}</button>
+                      <a href="https://www.airbnb.com.vn/multicalendar" target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg bg-white border border-rose-300 text-rose-700 font-semibold">Mở lịch Airbnb</a>
+                    </div>
                   </div>
                   <div className="mt-2 space-y-2">
                     {[...new Set(data.airbnbTodo.map((t) => t.roomId))].map((rid) => {
@@ -251,13 +255,19 @@ export default function VacancyPricingPage() {
                         <div key={rid} className="bg-white rounded-lg p-2">
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-xs font-semibold text-gray-800">{list[0].roomLabel}</p>
-                            <button disabled={saving !== null} onClick={() => rates("airbnb-done", list.map((t) => ({ roomId: t.roomId, date: t.date })), "done" + rid)}
-                              className="text-[11px] px-2 py-1 rounded-md bg-emerald-600 text-white font-semibold shrink-0 disabled:opacity-50">Đã chỉnh xong</button>
+                            <div className="flex gap-1 shrink-0">
+                              <button disabled={saving !== null} onClick={() => { if (confirm(`Xoá ${list.length} đêm của ${list[0].roomLabel} khỏi danh sách cần chỉnh?`)) rates("clear", list.map((t) => ({ roomId: t.roomId, date: t.date })), "clr" + rid); }}
+                                className="text-[11px] px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-semibold disabled:opacity-50">Xoá</button>
+                              <button disabled={saving !== null} onClick={() => rates("airbnb-done", list.map((t) => ({ roomId: t.roomId, date: t.date })), "done" + rid)}
+                                className="text-[11px] px-2 py-1 rounded-md bg-emerald-600 text-white font-semibold disabled:opacity-50">Đã chỉnh xong</button>
+                            </div>
                           </div>
                           <div className="flex flex-wrap gap-1 mt-1">
                             {list.map((t) => (
-                              <span key={t.date} className="text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 tabular-nums">
-                                {ddmm(t.date)}: {t.current != null ? `${k(t.current)} → ` : ""}<b>{k(t.target)}</b>
+                              <span key={t.date} className="text-[11px] pl-1.5 rounded bg-rose-100 text-rose-800 tabular-nums inline-flex items-center">
+                                {ddmm(t.date)}: {t.current != null ? `${k(t.current)} → ` : ""}<b className="ml-0.5">{k(t.target)}</b>
+                                <button disabled={saving !== null} onClick={() => rates("clear", [{ roomId: t.roomId, date: t.date }], "clr" + t.roomId + t.date)}
+                                  title="Xoá đêm này" className="px-1.5 py-0.5 text-rose-500 hover:text-rose-800 disabled:opacity-50">×</button>
                               </span>
                             ))}
                           </div>
@@ -265,7 +275,7 @@ export default function VacancyPricingPage() {
                       );
                     })}
                   </div>
-                  <p className="text-[11px] text-rose-700 mt-2">Giá Airbnb đã quy đổi theo mức chênh hiện tại giữa giá Airbnb và giá gốc của phòng. JoyBot báo giá theo giá đã áp dụng ngay; website sẽ nối sau.</p>
+                  <p className="text-[11px] text-rose-700 mt-2">Bấm × để xoá từng đêm, “Xoá” để xoá cả phòng (bỏ giá đã áp dụng, đêm quay lại phần gợi ý). Giá Airbnb đã quy đổi theo mức chênh hiện tại giữa giá Airbnb và giá gốc của phòng. JoyBot báo giá theo giá đã áp dụng ngay; website sẽ nối sau.</p>
                 </div>
               )}
 
