@@ -13,6 +13,10 @@ export const isWeekendNight = (d: Date) => [5, 6].includes(d.getUTCDay());
 export const baseOf = (r: RoomPrice, d: Date) => (isWeekendNight(d) ? r.weekendPricePerNight ?? r.pricePerNight : r.pricePerNight) ?? 0;
 export const toDate = (s: string) => new Date(`${s.slice(0, 10)}T00:00:00.000Z`);
 const r10k = (n: number) => Math.round(n / 10_000) * 10_000;
+/** chạy song song theo lô (tránh quá thời gian hàm Vercel khi lưu nhiều đêm) */
+async function inBatches<T>(items: T[], fn: (x: T) => Promise<unknown>, size = 10) {
+  for (let i = 0; i < items.length; i += size) await Promise.all(items.slice(i, i + size).map(fn));
+}
 
 export async function ratesBetween(from: Date, to: Date, roomId?: string) {
   return prisma.roomRate.findMany({ where: { date: { gte: from, lt: to }, ...(roomId ? { roomId } : {}) }, orderBy: { date: "asc" } });
@@ -34,9 +38,9 @@ export async function applyRates(items: ApplyItem[]) {
   const ratio = new Map<string, number>();
   for (const r of rooms) ratio.set(r.id, await airbnbRatio(r));
   let n = 0;
-  for (const it of items) {
+  await inBatches(items, async (it) => {
     const room = rooms.find((r) => r.id === it.roomId);
-    if (!room) continue;
+    if (!room) return;
     const date = toDate(it.date);
     const existing = await prisma.roomRate.findUnique({ where: { roomId_date: { roomId: room.id, date } } });
     const k = ratio.get(room.id) ?? 1;
@@ -54,7 +58,7 @@ export async function applyRates(items: ApplyItem[]) {
     };
     await prisma.roomRate.upsert({ where: { roomId_date: { roomId: room.id, date } }, create: { roomId: room.id, date, ...data }, update: data });
     n++;
-  }
+  });
   return n;
 }
 
@@ -74,7 +78,7 @@ export async function clearRates(items: { roomId: string; date: string }[]) {
 /** Lưu giá & gợi ý giá đọc từ lịch Airbnb */
 export async function saveAirbnbTips(items: { roomId: string; date: string; airbnbPrice?: number | null; airbnbTip?: number | null }[]) {
   let n = 0;
-  for (const it of items) {
+  await inBatches(items, async (it) => {
     const date = toDate(it.date);
     const data = { airbnbPrice: it.airbnbPrice ?? null, airbnbTip: it.airbnbTip ?? null, tipAt: new Date() };
     const ex = await prisma.roomRate.findUnique({ where: { roomId_date: { roomId: it.roomId, date } } });
@@ -82,7 +86,7 @@ export async function saveAirbnbTips(items: { roomId: string; date: string; airb
     const done = ex?.airbnbTarget != null && it.airbnbPrice != null && Math.abs(ex.airbnbTarget - it.airbnbPrice) < 15_000 ? { airbnbDoneAt: ex.airbnbDoneAt ?? new Date() } : {};
     await prisma.roomRate.upsert({ where: { roomId_date: { roomId: it.roomId, date } }, create: { roomId: it.roomId, date, ...data }, update: { ...data, ...done } });
     n++;
-  }
+  });
   return n;
 }
 
