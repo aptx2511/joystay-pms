@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Lock, LockOpen, Loader2, Tag } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Filter, Lock, LockOpen, Loader2, Tag } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { formatPrice } from "@/lib/utils";
 
@@ -63,6 +63,58 @@ export default function VacancyPricingPage() {
   useEffect(() => { loadAdvice(); }, [loadAdvice]);
 
   const [saving, setSaving] = useState<string | null>(null);
+
+  // ── Bộ lọc & áp giá hàng loạt ──
+  const [fRooms, setFRooms] = useState<string[]>([]);           // rỗng = tất cả phòng
+  const [fKinds, setFKinds] = useState<Gap["kind"][]>([]);      // rỗng = tất cả loại
+  const [fFrom, setFFrom] = useState("");
+  const [fTo, setFTo] = useState("");
+  const [fDays, setFDays] = useState<"all" | "weekday" | "weekend">("all");
+  const [showApplied, setShowApplied] = useState(false);       // mặc định ẩn đêm đã áp dụng
+  const [method, setMethod] = useState<"rule" | "tip" | "pct">("rule");
+  const [pct, setPct] = useState(-10);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
+
+  const toggle = <T,>(arr: T[], v: T) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+  const visible = useMemo(() => {
+    if (!data) return [];
+    return data.gaps
+      .filter((g) => (!fRooms.length || fRooms.includes(g.roomId)) && (!fKinds.length || fKinds.includes(g.kind)))
+      .map((g) => ({
+        ...g,
+        nightsAdvice: g.nightsAdvice.filter((n) =>
+          (showApplied || n.applied == null) &&
+          (!fFrom || n.date >= fFrom) && (!fTo || n.date <= fTo) &&
+          (fDays === "all" || (fDays === "weekend" ? n.weekend : !n.weekend))),
+      }))
+      .filter((g) => g.nightsAdvice.length > 0);
+  }, [data, fRooms, fKinds, fFrom, fTo, fDays, showApplied]);
+  const appliedCount = useMemo(() => (data ? data.gaps.reduce((s, g) => s + g.nightsAdvice.filter((n) => n.applied != null).length, 0) : 0), [data]);
+  const targets = visible.flatMap((g) => g.nightsAdvice.filter((n) => n.applied == null).map((n) => ({ g, n })));
+  const appliedInView = visible.flatMap((g) => g.nightsAdvice.filter((n) => n.applied != null).map((n) => ({ g, n })));
+  const r10k = (x: number) => Math.round(x / 10_000) * 10_000;
+
+  async function bulk(kind: "apply" | "clear") {
+    let items: object[] = [];
+    if (kind === "clear") items = appliedInView.map(({ g, n }) => ({ roomId: g.roomId, date: n.date }));
+    else if (method === "rule") items = targets.map(({ g, n }) => ({ roomId: g.roomId, date: n.date, price: n.suggested, source: "RULE" }));
+    else if (method === "tip") items = targets.filter(({ n }) => n.airbnbTip != null).map(({ g, n }) => ({ roomId: g.roomId, date: n.date, useTip: true }));
+    else items = targets.map(({ g, n }) => ({ roomId: g.roomId, date: n.date, price: r10k(n.base * (1 + pct / 100)), source: "MANUAL" }));
+    if (!items.length) { setBulkMsg(method === "tip" && kind === "apply" ? "Không có đêm nào trong bộ lọc có gợi ý giá Airbnb." : "Không có đêm nào để xử lý."); return; }
+    const label = kind === "clear" ? `Đưa ${items.length} đêm về giá gốc?` :
+      `Áp dụng ${method === "rule" ? "giá gợi ý PMS" : method === "tip" ? "giá Airbnb gợi ý" : `giá gốc ${pct > 0 ? "+" : ""}${pct}%`} cho ${items.length} đêm đang lọc?`;
+    if (!confirm(label)) return;
+    setSaving("bulk"); setBulkMsg(null);
+    try {
+      for (let i = 0; i < items.length; i += 40) {
+        await fetch("/api/rates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: kind, items: items.slice(i, i + 40) }) });
+      }
+      setBulkMsg(kind === "clear" ? `Đã đưa ${items.length} đêm về giá gốc.` : `Đã áp dụng ${items.length} đêm — các đêm này đã được ẩn khỏi danh sách.`);
+      await loadAdvice();
+    } finally {
+      setSaving(null);
+    }
+  }
   async function rates(action: "apply" | "clear" | "airbnb-done", items: object[], key: string) {
     setSaving(key);
     try {
@@ -197,14 +249,71 @@ export default function VacancyPricingPage() {
 
               <p className="text-[11px] text-gray-400 mt-3">{data.tipsAt ? `Gợi ý giá Airbnb cập nhật lúc ${new Date(data.tipsAt).toLocaleString("vi-VN")}.` : "Chưa có gợi ý giá Airbnb — nhắn Claude \"cập nhật gợi ý giá Airbnb\"."}</p>
 
+              {/* ── Bộ lọc & áp giá hàng loạt ── */}
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2.5">
+                <p className="text-sm font-semibold text-gray-900 flex items-center gap-1.5"><Filter size={15} /> Lọc & áp giá hàng loạt</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button onClick={() => setFRooms([])} className={`text-xs px-2.5 py-1 rounded-full border ${fRooms.length === 0 ? "bg-gray-900 text-white border-gray-900" : "bg-white border-gray-300"}`}>Tất cả phòng</button>
+                  {data.rooms.filter((r) => r.freeAhead > 0).map((r) => (
+                    <button key={r.roomId} onClick={() => setFRooms(toggle(fRooms, r.roomId))}
+                      className={`text-xs px-2.5 py-1 rounded-full border ${fRooms.includes(r.roomId) ? "bg-amber-500 text-white border-amber-500" : "bg-white border-gray-300"}`}>{r.roomLabel.split(" · ")[0]}</button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(Object.keys(KIND) as Gap["kind"][]).map((kd) => (
+                    <button key={kd} onClick={() => setFKinds(toggle(fKinds, kd))}
+                      className={`text-xs px-2.5 py-1 rounded-full border ${fKinds.includes(kd) ? "bg-amber-500 text-white border-amber-500" : "bg-white border-gray-300"}`}>{KIND[kd].label}</button>
+                  ))}
+                  <span className="w-px bg-gray-300 mx-0.5" />
+                  {([["all", "Mọi đêm"], ["weekday", "Ngày thường"], ["weekend", "T6–T7"]] as const).map(([v, l]) => (
+                    <button key={v} onClick={() => setFDays(v)} className={`text-xs px-2.5 py-1 rounded-full border ${fDays === v ? "bg-gray-900 text-white border-gray-900" : "bg-white border-gray-300"}`}>{l}</button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-[11px] text-gray-500 min-w-0">Từ ngày<input type="date" value={fFrom} onChange={(e) => setFFrom(e.target.value)} className="block w-full min-w-0 mt-0.5 border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white" /></label>
+                  <label className="text-[11px] text-gray-500 min-w-0">Đến ngày<input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} className="block w-full min-w-0 mt-0.5 border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white" /></label>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-gray-600">Cách tính:</span>
+                  {([["rule", "Gợi ý PMS"], ["tip", "Airbnb gợi ý"], ["pct", "% giá gốc"]] as const).map(([v, l]) => (
+                    <button key={v} onClick={() => setMethod(v)} className={`text-xs px-2.5 py-1 rounded-full border ${method === v ? "bg-gray-900 text-white border-gray-900" : "bg-white border-gray-300"}`}>{l}</button>
+                  ))}
+                  {method === "pct" && (
+                    <span className="flex items-center gap-1 text-xs">
+                      <input type="number" value={pct} onChange={(e) => setPct(Number(e.target.value))} className="w-16 border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white" />%
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button disabled={saving !== null || targets.length === 0} onClick={() => bulk("apply")}
+                    className="text-sm px-3 py-2 rounded-lg bg-amber-500 text-white font-semibold disabled:opacity-40">
+                    {saving === "bulk" ? "Đang áp dụng…" : `Áp dụng cho ${method === "tip" ? targets.filter((t) => t.n.airbnbTip != null).length : targets.length} đêm đang lọc`}
+                  </button>
+                  {showApplied && appliedInView.length > 0 && (
+                    <button disabled={saving !== null} onClick={() => bulk("clear")} className="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-700 font-semibold disabled:opacity-40">
+                      Về giá gốc {appliedInView.length} đêm
+                    </button>
+                  )}
+                  {(fRooms.length || fKinds.length || fFrom || fTo || fDays !== "all") ? (
+                    <button onClick={() => { setFRooms([]); setFKinds([]); setFFrom(""); setFTo(""); setFDays("all"); }} className="text-xs text-gray-500 underline">Bỏ lọc</button>
+                  ) : null}
+                </div>
+                <label className="flex items-center gap-2 text-xs text-gray-600">
+                  <input type="checkbox" checked={showApplied} onChange={(e) => setShowApplied(e.target.checked)} />
+                  Hiện cả đêm đã áp dụng ({appliedCount} đêm đang ẩn{showApplied ? " — đang hiện" : ""})
+                </label>
+                {bulkMsg && <p className="text-sm font-medium text-gray-800">{bulkMsg}</p>}
+              </div>
+
               <div className="space-y-3 mt-3">
-                {data.gaps.map((g) => (
+                {visible.length === 0 && data.gaps.length > 0 && <p className="text-sm text-gray-500">Không còn đêm nào khớp bộ lọc{!showApplied && appliedCount ? " (các đêm đã áp dụng đang được ẩn)" : ""}.</p>}
+                {visible.map((g) => (
                   <div key={g.roomId + g.from} className="border border-gray-200 rounded-xl p-3 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold text-sm text-gray-900">{g.roomLabel}</span>
                       <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${KIND[g.kind].cls}`}>{KIND[g.kind].label}</span>
                     </div>
-                    <p className="text-sm text-gray-600 mt-0.5">{ddmm(g.from)} → {ddmm(g.to)} · {g.nights} đêm · tổng gợi ý <b>{formatPrice(g.total)}</b></p>
+                    <p className="text-sm text-gray-600 mt-0.5">{ddmm(g.from)} → {ddmm(g.to)} · {g.nights} đêm{g.nightsAdvice.length !== g.nights ? ` (đang hiện ${g.nightsAdvice.length})` : ""} · tổng gợi ý <b>{formatPrice(g.total)}</b></p>
 
                     <div className="flex gap-1.5 overflow-x-auto mt-2 pb-1">
                       {g.nightsAdvice.map((n) => (
