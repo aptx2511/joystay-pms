@@ -61,6 +61,7 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
         status:     editBooking.status,
         totalPrice: editBooking.totalPrice != null ? String(editBooking.totalPrice) : "",
         notes:      editBooking.notes ?? "",
+        confirmationCode: (editBooking as Booking & { confirmationCode?: string | null }).confirmationCode ?? "",
       });
     } else {
       setForm({ ...EMPTY, ...initialData });
@@ -193,9 +194,10 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
             </select>
           </div>
 
-          {/* Guest name */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Guest Name *</label>
+          {/* Guest name + Booking ID */}
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_160px] gap-3">
+          <div className="min-w-0">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Tên khách *</label>
             <input
               type="text"
               value={form.guestName}
@@ -204,6 +206,17 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
               placeholder="e.g. Nguyen Van A"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
+          </div>
+          <div className="min-w-0">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Booking ID (mã đặt phòng)</label>
+            <input
+              type="text"
+              value={form.confirmationCode ?? ""}
+              onChange={set("confirmationCode")}
+              placeholder="HM…"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
           </div>
 
           {/* Dates */}

@@ -106,7 +106,9 @@ async function runSync() {
               await prisma.booking.update({
                 where: { id: existing.id },
                 data: {
-                  checkIn, checkOut, guestName, feedKey, lastSyncedAt: now,
+                  checkIn, checkOut, feedKey, lastSyncedAt: now,
+                  // giữ tên khách thật đã nhập/tra (iCal Airbnb chỉ có "Reserved") — chỉ ghi đè khi tên đang là tên mặc định
+                  ...((isBlock || !existing.guestName || existing.guestName.startsWith(platform.defaultGuestName) || !isGeneric) && { guestName }),
                   status, cancelledAt: null,
                   ...(air.code && { confirmationCode: air.code }),
                   ...(!keepPrice && { totalPrice: autoPrice }),

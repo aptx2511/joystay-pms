@@ -187,12 +187,15 @@ export async function arrivalsDigest() {
   };
 }
 
-/** Cho JoyBot cấp mã TTLock: khách đến hôm nay/ngày mai, có số phòng, chưa có mã */
+/** Cho JoyBot cấp mã TTLock: khách đến hôm nay/ngày mai (hoặc đang ở, nhận phòng ≤2 ngày trước), chưa có mã */
 export async function pendingCodes() {
   const today = vnToday();
   const list = await staysBetween(today, new Date(today.getTime() + 2 * DAY));
   return list
-    .filter((b) => dayKey(b.checkIn) >= dayKey(today) && b.portal && doorCodesOf(b.portal).length === 0)
+    // khách sắp đến (hôm nay/mai) HOẶC đã nhận phòng ≤ 2 ngày trước mà vẫn chưa có mã (lần cấp trước lỗi, vd bộ phát mất mạng)
+    // → bot tiếp tục thử lại, không bỏ cuộc khi qua ngày nhận phòng
+    .filter((b) => dayKey(b.checkIn) >= dayKey(new Date(today.getTime() - 2 * DAY)) && dayKey(b.checkOut) > dayKey(today)
+      && b.portal && doorCodesOf(b.portal).length === 0)
     .map((b) => ({
       bookingId: b.id,
       code: b.confirmationCode ?? b.id.slice(-6).toUpperCase(),

@@ -41,7 +41,7 @@ const CORS = {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { roomId, guestName, guestEmail, guestPhone, checkIn, checkOut, source, status, totalPrice, notes, cccdFrontUrl, cccdBackUrl } = body;
+    const { roomId, guestName, guestEmail, guestPhone, checkIn, checkOut, source, status, totalPrice, notes, cccdFrontUrl, cccdBackUrl, confirmationCode } = body;
 
     if (!roomId || !guestName || !checkIn || !checkOut) {
       return NextResponse.json(
@@ -101,6 +101,7 @@ export async function POST(request: Request) {
         notes:        notes ?? null,
         cccdFrontUrl: cccdFrontUrl ?? null,
         cccdBackUrl:  cccdBackUrl  ?? null,
+        confirmationCode: confirmationCode ? String(confirmationCode).trim().toUpperCase() : null,
       },
       include: { room: true, guest: true },
     });

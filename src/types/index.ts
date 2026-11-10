@@ -97,6 +97,7 @@ export interface BookingFormData {
   status: BookingStatus;
   totalPrice: string;
   notes: string;
+  confirmationCode?: string;
 }
 
 // Source metadata for display

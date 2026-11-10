@@ -29,7 +29,7 @@ export async function PUT(
   const { id } = await params;
   try {
     const body = await request.json();
-    const { roomId, guestName, checkIn, checkOut, source, status, totalPrice, notes } = body;
+    const { roomId, guestName, checkIn, checkOut, source, status, totalPrice, notes, confirmationCode } = body;
 
     const ciDate = checkIn ? parseISO(checkIn) : undefined;
     const coDate = checkOut ? parseISO(checkOut) : undefined;
@@ -70,6 +70,7 @@ export async function PUT(
         ...(status     && { status }),
         totalPrice: totalPrice !== undefined ? (totalPrice ? parseFloat(totalPrice) : null) : undefined,
         ...(notes !== undefined && { notes }),
+        ...(confirmationCode !== undefined && { confirmationCode: String(confirmationCode).trim().toUpperCase() || null }),
       },
       include: { room: true },
     });

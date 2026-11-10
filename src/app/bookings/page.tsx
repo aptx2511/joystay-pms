@@ -28,6 +28,8 @@ const DEFAULT_STATUSES: BookingStatus[] = ["CONFIRMED", "PENDING"];
 /** Hôm nay theo giờ VN, dạng YYYY-MM-DD */
 const vnTodayKey = () => new Date(Date.now() + 7 * 3_600_000).toISOString().slice(0, 10);
 const key = (iso: string) => iso.slice(0, 10);
+/** tên mặc định từ iCal (Airbnb chỉ gửi "Reserved") → coi như chưa có tên khách thật */
+const isPlaceholderName = (n: string) => /^(airbnb|booking\.com|agoda|traveloka)( guest)?( \(|$)|^reserved|not available|closed/i.test(n.trim());
 const roomLabel = (b: Row) => (b.room ? (b.room.roomNumber ? `${b.room.roomNumber} · ${b.room.name}` : b.room.name) : "—");
 
 export default function BookingsPage() {
@@ -39,6 +41,9 @@ export default function BookingsPage() {
 
   // ── Bộ lọc ────────────────────────────────────────────────────────────────
   const [search,   setSearch]   = useState("");
+  const [qName,    setQName]    = useState("");
+  const [qCode,    setQCode]    = useState("");
+  const [noName,   setNoName]   = useState(false);
   const [period,   setPeriod]   = useState<Period>("upcoming");
   const [from,     setFrom]     = useState("");
   const [to,       setTo]       = useState("");
@@ -91,6 +96,9 @@ export default function BookingsPage() {
         if (roomId && b.roomId !== roomId) return false;
         if (sources.length && !sources.includes(b.source as BookingSource)) return false;
         if (statuses.length && !statuses.includes(b.status as BookingStatus)) return false;
+        if (qName && !b.guestName.toLowerCase().includes(qName.trim().toLowerCase())) return false;
+        if (qCode && !(b.confirmationCode ?? "").toLowerCase().includes(qCode.trim().toLowerCase())) return false;
+        if (noName && !isPlaceholderName(b.guestName)) return false;
         if (q) {
           const hay = `${b.guestName} ${roomLabel(b)} ${b.confirmationCode ?? ""} ${b.notes ?? ""}`.toLowerCase();
           if (!hay.includes(q)) return false;
@@ -98,7 +106,7 @@ export default function BookingsPage() {
         return true;
       })
       .sort((a, b) => (sortAsc ? 1 : -1) * a.checkIn.localeCompare(b.checkIn));
-  }, [bookings, search, period, from, to, roomId, sources, statuses, sortAsc]);
+  }, [bookings, search, qName, qCode, noName, period, from, to, roomId, sources, statuses, sortAsc]);
 
   const summary = useMemo(() => {
     const confirmed = filtered.filter((b) => b.status === "CONFIRMED");
@@ -110,11 +118,11 @@ export default function BookingsPage() {
   }, [filtered]);
 
   const isDefault =
-    !search && period === "upcoming" && !roomId && sources.length === 0 &&
+    !search && !qName && !qCode && !noName && period === "upcoming" && !roomId && sources.length === 0 &&
     statuses.length === DEFAULT_STATUSES.length && DEFAULT_STATUSES.every((s) => statuses.includes(s));
 
   function resetFilters() {
-    setSearch(""); setPeriod("upcoming"); setFrom(""); setTo(""); setRoomId("");
+    setSearch(""); setQName(""); setQCode(""); setNoName(false); setPeriod("upcoming"); setFrom(""); setTo(""); setRoomId("");
     setSources([]); setStatuses(DEFAULT_STATUSES); setSortAsc(true);
   }
 
@@ -194,6 +202,18 @@ export default function BookingsPage() {
             </button>
           </div>
 
+          {/* Tên khách + Booking ID */}
+          <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_auto] gap-2">
+            <input type="text" placeholder="Tên khách…" value={qName} onChange={(e) => setQName(e.target.value)}
+              className="min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            <input type="text" placeholder="Booking ID (HM…)" value={qCode} onChange={(e) => setQCode(e.target.value)}
+              className="min-w-0 px-3 py-2 text-sm font-mono uppercase border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            <label className="col-span-2 md:col-span-1 flex items-center gap-2 text-xs text-gray-600 px-1">
+              <input type="checkbox" checked={noName} onChange={(e) => setNoName(e.target.checked)} />
+              Chỉ booking chưa có tên khách thật
+            </label>
+          </div>
+
           {/* Kênh + trạng thái */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -245,12 +265,13 @@ export default function BookingsPage() {
                   className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 cursor-pointer active:bg-amber-50 transition-colors"
                 >
                   <div className="flex items-start justify-between mb-1.5">
-                    <span className="font-semibold text-gray-900">{booking.guestName}</span>
+                    <span className={`font-semibold ${isPlaceholderName(booking.guestName) ? "text-gray-400 italic" : "text-gray-900"}`}>{booking.guestName}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.bgClass} ${status.textClass}`}>
                       {status.label}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-500 mb-2">{roomLabel(booking)}{booking.confirmationCode ? ` · ${booking.confirmationCode}` : ""}</p>
+                  <p className="text-sm text-gray-500 mb-2">{roomLabel(booking)}</p>
+                  <p className="text-xs text-gray-500 mb-2">Booking ID: <span className="font-mono text-gray-800">{booking.confirmationCode ?? "—"}</span></p>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500">
                       {format(parseISO(booking.checkIn), "dd/MM")} → {format(parseISO(booking.checkOut), "dd/MM/yy")}
@@ -277,7 +298,7 @@ export default function BookingsPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {["Khách", "Phòng", "Nhận phòng", "Trả phòng", "Đêm", "Kênh", "Trạng thái", "Giá"].map((h) => (
+                {["Khách", "Booking ID", "Phòng", "Nhận phòng", "Trả phòng", "Đêm", "Kênh", "Trạng thái", "Giá"].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                     {h}
                   </th>
@@ -287,11 +308,11 @@ export default function BookingsPage() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-10 text-gray-400">Loading…</td>
+                  <td colSpan={9} className="text-center py-10 text-gray-400">Loading…</td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-10 text-gray-400">Không có booking khớp bộ lọc.</td>
+                  <td colSpan={9} className="text-center py-10 text-gray-400">Không có booking khớp bộ lọc.</td>
                 </tr>
               ) : (
                 filtered.map((booking) => {
@@ -303,10 +324,8 @@ export default function BookingsPage() {
                       onClick={() => openEdit(booking)}
                       className="hover:bg-amber-50/40 cursor-pointer transition-colors"
                     >
-                      <td className="px-4 py-3 font-medium text-gray-900">
-                        {booking.guestName}
-                        {booking.confirmationCode && <span className="block text-xs font-normal text-gray-400">{booking.confirmationCode}</span>}
-                      </td>
+                      <td className={`px-4 py-3 font-medium ${isPlaceholderName(booking.guestName) ? "text-gray-400 italic" : "text-gray-900"}`}>{booking.guestName}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-700">{booking.confirmationCode ?? "—"}</td>
                       <td className="px-4 py-3 text-gray-600">{roomLabel(booking)}</td>
                       <td className="px-4 py-3 text-gray-600">{format(parseISO(booking.checkIn),  "dd MMM yyyy")}</td>
                       <td className="px-4 py-3 text-gray-600">{format(parseISO(booking.checkOut), "dd MMM yyyy")}</td>
