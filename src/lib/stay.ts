@@ -198,6 +198,7 @@ export async function pendingCodes() {
       && b.portal && doorCodesOf(b.portal).length === 0)
     .map((b) => ({
       bookingId: b.id,
+      source: b.source,
       code: b.confirmationCode ?? b.id.slice(-6).toUpperCase(),
       roomNo: b.room.roomNumber,
       roomName: b.room.name,
