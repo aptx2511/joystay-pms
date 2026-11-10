@@ -9,10 +9,11 @@ type Params = { params: Promise<{ bookingId: string }> };
  * PATCH /api/stay/admin/:bookingId
  *   { doorCodes: [{door, code}], source?: "TTLOCK" | "MANUAL" }  → lưu mã cửa (JoyBot tự gọi khi cấp mã TTLock)
  *   { registered: true | false }                                 → đã/chưa khai báo lưu trú
+ *   { phoneLast4: "1234" }                                       → mã cửa đề xuất Airbnb (4 số cuối ĐT) để bot cài TTLock
  */
 export async function PATCH(request: Request, { params }: Params) {
   const { bookingId } = await params;
-  const body = (await request.json().catch(() => ({}))) as { doorCodes?: DoorCode[]; source?: string; registered?: boolean };
+  const body = (await request.json().catch(() => ({}))) as { doorCodes?: DoorCode[]; source?: string; registered?: boolean; phoneLast4?: string | null };
   const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
   if (!booking) return NextResponse.json({ error: "Không thấy booking" }, { status: 404 });
 
@@ -26,6 +27,11 @@ export async function PATCH(request: Request, { params }: Params) {
     data.codesIssuedAt = codes.length ? new Date() : null;
   }
   if (body.registered !== undefined) data.registeredAt = body.registered ? new Date() : null;
+  // "Mã cửa đề xuất" của Airbnb (= 4 số cuối ĐT khách) — bot dùng số này để cài lên TTLock
+  if (body.phoneLast4 !== undefined) {
+    const v = String(body.phoneLast4 ?? "").replace(/\D/g, "");
+    data.phoneLast4 = /^\d{4}$/.test(v) ? v : null;
+  }
 
   const portal = await prisma.stayPortal.upsert({
     where: { bookingId },
