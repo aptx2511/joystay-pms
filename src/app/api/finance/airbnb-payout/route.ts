@@ -11,7 +11,7 @@ import { tgNotify } from "@/lib/telegram";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const b = (await request.json().catch(() => ({}))) as { code?: string; payout?: number; guestName?: string; kind?: string; subject?: string };
+  const b = (await request.json().catch(() => ({}))) as { code?: string; payout?: number; nights?: number; guestName?: string; kind?: string; subject?: string };
   const code = String(b.code ?? "").toUpperCase().trim();
   const payout = Math.round(Number(b.payout ?? 0));
   if (!/^HM[A-Z0-9]{6,10}$/.test(code) || !(payout > 0)) {
@@ -27,6 +27,17 @@ export async function POST(request: Request) {
   if (!booking) {
     // iCal có thể chưa kéo về — lưu tạm vào bảng cảnh báo để lần sau khớp lại
     return NextResponse.json({ ok: false, pending: true, error: "Chưa có đơn mang mã này trong PMS" }, { status: 404 });
+  }
+
+  // Chốt chặn: email cũ (vd xác nhận 25 đêm) mà đơn đã đổi ngày (còn 4 đêm) → KHÔNG ghi số tiền sai
+  const pmsNights = Math.round((booking.checkOut.getTime() - booking.checkIn.getTime()) / 86_400_000);
+  const emailNights = Math.round(Number(b.nights ?? 0));
+  if (emailNights > 0 && emailNights !== pmsNights) {
+    await tgNotify(
+      `ℹ️ Email Airbnb ${code} (${booking.guestName}) ghi ${emailNights} đêm nhưng đơn trong PMS hiện ${pmsNights} đêm — ` +
+      `có thể đơn đã đổi ngày. KHÔNG cập nhật tiền theo email này; chờ email thay đổi đặt phòng hoặc nhập CSV Airbnb.`,
+    );
+    return NextResponse.json({ ok: true, skipped: "nights-mismatch" });
   }
 
   const before = booking.totalPrice ?? 0;
