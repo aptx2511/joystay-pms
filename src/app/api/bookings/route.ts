@@ -24,6 +24,13 @@ export async function GET(request: Request) {
       orderBy: { checkIn: "asc" },
     });
 
+    // Chưa đăng nhập (xem công khai): ẩn liên hệ, giấy tờ, ghi chú của khách
+    if (request.headers.get("x-pms-auth") !== "1") {
+      return NextResponse.json(bookings.map(({ guest, cccdFrontUrl, cccdBackUrl, notes, ...b }) => {
+        void guest; void cccdFrontUrl; void cccdBackUrl; void notes;
+        return { ...b, guest: null, notes: null, room: b.room ? { ...b.room, icalUrl: null, airbnbIcalUrl2: null, bookingIcalUrl: null, agodaIcalUrl: null, travelokaIcalUrl: null } : b.room };
+      }));
+    }
     return NextResponse.json(bookings);
   } catch (error) {
     console.error("[GET /api/bookings]", error);
@@ -96,7 +103,8 @@ export async function POST(request: Request) {
         checkIn:    ciDate,
         checkOut:   coDate,
         source:     source ?? "DIRECT",
-        status:     status ?? "PENDING",
+        // chưa đăng nhập (website khách tự đặt) → luôn chờ duyệt
+        status:     request.headers.get("x-pms-auth") === "1" ? status ?? "PENDING" : "PENDING",
         totalPrice:   totalPrice ? parseFloat(totalPrice) : null,
         notes:        notes ?? null,
         cccdFrontUrl: cccdFrontUrl ?? null,

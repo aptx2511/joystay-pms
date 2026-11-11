@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const rooms = await prisma.room.findMany({ orderBy: { sortOrder: "asc" } });
+    // chưa đăng nhập: ẩn link lịch iCal (link bí mật của các kênh)
+    if (request.headers.get("x-pms-auth") !== "1")
+      return NextResponse.json(rooms.map((r) => ({ ...r, icalUrl: null, airbnbIcalUrl2: null, bookingIcalUrl: null, agodaIcalUrl: null, travelokaIcalUrl: null })));
     return NextResponse.json(rooms);
   } catch (error) {
     console.error("[GET /api/rooms]", error);

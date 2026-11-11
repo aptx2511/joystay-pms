@@ -13,7 +13,11 @@ import {
   BedDouble,
   Tag,
   Wallet,
+  Lock,
+  LogIn,
+  LogOut,
 } from "lucide-react";
+import { logout, PUBLIC_NAV, useAuth } from "@/lib/hooks/useAuth";
 
 const NAV_ITEMS = [
   { href: "/",           label: "Dashboard",   icon: LayoutDashboard },
@@ -29,6 +33,8 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const auth = useAuth();
+  if (pathname === "/login") return null;
   if (pathname?.startsWith("/t/") || pathname === "/s" || pathname?.startsWith("/s/")) return null; // trang lao công: không hiện menu quản trị
 
   return (
@@ -58,10 +64,19 @@ export default function Sidebar() {
             >
               <Icon size={18} />
               {label}
+              {auth && !auth.authed && !PUBLIC_NAV.has(href) && <Lock size={13} className="ml-auto text-slate-500" />}
             </Link>
           );
         })}
       </nav>
+
+      <div className="px-3 pb-3">
+        {auth?.authed ? (
+          <button onClick={logout} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white"><LogOut size={16} /> Đăng xuất</button>
+        ) : auth ? (
+          <Link href="/login" className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-amber-400 hover:bg-slate-800"><LogIn size={16} /> Đăng nhập quản trị</Link>
+        ) : null}
+      </div>
 
       {/* Room legend */}
       <div className="px-4 pb-4 pt-2 border-t border-slate-700">

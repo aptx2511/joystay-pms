@@ -6,14 +6,18 @@ import GanttCalendar from "@/components/calendar/GanttCalendar";
 import BookingForm from "@/components/bookings/BookingForm";
 import { Booking, BookingFormData } from "@/types";
 import { format } from "date-fns";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 export default function DashboardPage() {
   const [formOpen,  setFormOpen]  = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [editBooking,  setEditBooking]  = useState<Booking | undefined>(undefined);
   const [prefillData, setPrefillData] = useState<Partial<BookingFormData> | undefined>(undefined);
+  const auth = useAuth();
+  const needLogin = () => { if (auth && !auth.authed) { if (confirm("Cần đăng nhập quản trị để thêm/sửa booking. Đăng nhập ngay?")) location.href = "/login?next=/"; return true; } return false; };
 
   function openNewBooking(date?: string, roomId?: string) {
+    if (needLogin()) return;
     setEditBooking(undefined);
     setPrefillData({
       checkIn:  date ?? format(new Date(), "yyyy-MM-dd"),
@@ -24,6 +28,7 @@ export default function DashboardPage() {
   }
 
   function openEditBooking(booking: Booking) {
+    if (needLogin()) return;
     setEditBooking(booking);
     setPrefillData(undefined);
     setFormOpen(true);

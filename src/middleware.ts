@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
 /**
  * Lớp bảo vệ PMS (Ops 2.0 — Giai đoạn 0).
  *
- * BẬT khi đặt biến môi trường PMS_ADMIN_PASSWORD trên Vercel. Chưa đặt → không chặn gì
- * (để triển khai từng bước, không làm gãy website/JoyBot đang gọi PMS).
+ * LUÔN BẬT (11/11/2026). Ai có link chỉ xem được Dashboard + Bookings (chỉ đọc, đã ẩn thông tin nhạy cảm);
+ * các trang khác + mọi thao tác ghi cần đăng nhập ở /login (cookie ghi nhớ 400 ngày).
  *
  * Cách vào:
- *  - Chủ nhà: trình duyệt hỏi tài khoản → user "admin" (hoặc PMS_ADMIN_USER), mật khẩu PMS_ADMIN_PASSWORD
+ *  - Chủ nhà: /login — mật khẩu PMS_ADMIN_PASSWORD (Vercel) hoặc mật khẩu tự tạo lần đầu (lưu băm trong DB)
+ *  - (cũ, vẫn nhận) Basic auth admin / PMS_ADMIN_PASSWORD
  *  - Máy chủ khác (website /api/book, JoyBot): header  x-api-key: PMS_API_KEY
  *  - Cron: header  Authorization: Bearer CRON_SECRET
  *  - Công khai: lịch iCal xuất cho OTA, kiểm tra phòng trống, lịch phòng cho website,
@@ -26,11 +28,20 @@ const PUBLIC_PREFIXES = [
   "/api/stay/t/",
   "/guide/",             // ảnh hướng dẫn tự nhận phòng
   "/api/payments/sepay", // webhook SePay (tự kiểm tra "Apikey SEPAY_API_KEY")
+  "/login",
+  "/api/auth/",          // đăng nhập / đăng xuất / tạo mật khẩu lần đầu
 ];
+// Trang xem công khai (ai có link): Dashboard + Bookings (chỉ đọc)
+const PUBLIC_PAGES = new Set(["/", "/bookings"]);
 
 function isPublic(pathname: string, method: string) {
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return true;
   if (pathname === "/s") return true;
+  if (PUBLIC_PAGES.has(pathname)) return true;
+  // dữ liệu cho 2 trang công khai (chỉ GET; route tự ẩn thông tin nhạy cảm khi chưa đăng nhập)
+  if (method === "GET" && (pathname === "/api/bookings" || pathname === "/api/rooms")) return true;
+  // website đặt phòng trực tiếp (như trước) — route ép trạng thái PENDING khi chưa đăng nhập
+  if (method === "POST" && pathname === "/api/bookings") return true;
   // website: GET /api/rooms/<id>/calendar
   if (method === "GET" && /^\/api\/rooms\/[^/]+\/calendar$/.test(pathname)) return true;
   return false;
@@ -43,7 +54,7 @@ function safeEqual(a: string, b: string) {
   return out === 0;
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   // stay.joystay.vn: chỉ phục vụ cổng khách, mọi đường dẫn khác chuyển về /s
   const host = req.headers.get("host") ?? "";
   if (host.startsWith("stay.")) {
@@ -53,40 +64,40 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const password = process.env.PMS_ADMIN_PASSWORD;
-  if (!password) return NextResponse.next(); // chưa bật bảo vệ
-
   const { pathname } = req.nextUrl;
-  if (req.method === "OPTIONS" || isPublic(pathname, req.method)) return NextResponse.next();
+  const authed = await isAuthed(req);
+  // header nội bộ cho route biết đã đăng nhập (luôn ghi đè — client không giả được)
+  const headers = new Headers(req.headers);
+  headers.set("x-pms-auth", authed ? "1" : "0");
+  const pass = () => NextResponse.next({ request: { headers } });
 
+  if (authed || req.method === "OPTIONS" || isPublic(pathname, req.method)) return pass();
+
+  if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Cần đăng nhập" }, { status: 401 });
+  const url = new URL("/login", req.url);
+  url.searchParams.set("next", pathname + req.nextUrl.search);
+  return NextResponse.redirect(url);
+}
+
+async function isAuthed(req: NextRequest) {
+  if (await verifySession(req.cookies.get(SESSION_COOKIE)?.value)) return true;
   const apiKey = process.env.PMS_API_KEY;
   const headerKey = req.headers.get("x-api-key");
-  if (apiKey && headerKey && safeEqual(headerKey, apiKey)) return NextResponse.next();
-
+  if (apiKey && headerKey && safeEqual(headerKey, apiKey)) return true;
   const auth = req.headers.get("authorization") ?? "";
   const cron = process.env.CRON_SECRET;
-  if (cron && safeEqual(auth, `Bearer ${cron}`)) return NextResponse.next();
-
-  if (auth.startsWith("Basic ")) {
+  if (cron && safeEqual(auth, `Bearer ${cron}`)) return true;
+  const password = process.env.PMS_ADMIN_PASSWORD;
+  if (password && auth.startsWith("Basic ")) {
     try {
       const decoded = atob(auth.slice(6));
       const sep = decoded.indexOf(":");
       const user = sep >= 0 ? decoded.slice(0, sep) : decoded;
-      const pass = sep >= 0 ? decoded.slice(sep + 1) : "";
-      const expectedUser = process.env.PMS_ADMIN_USER || "admin";
-      if (safeEqual(user, expectedUser) && safeEqual(pass, password)) return NextResponse.next();
-    } catch {
-      /* header hỏng → từ chối */
-    }
+      const pw = sep >= 0 ? decoded.slice(sep + 1) : "";
+      if (safeEqual(user, process.env.PMS_ADMIN_USER || "admin") && safeEqual(pw, password)) return true;
+    } catch { /* header hỏng */ }
   }
-
-  if (pathname.startsWith("/api/")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return new NextResponse("Cần đăng nhập Joystay PMS", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Joystay PMS", charset="UTF-8"' },
-  });
+  return false;
 }
 
 export const config = {

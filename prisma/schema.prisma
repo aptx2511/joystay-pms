@@ -228,3 +228,10 @@ model SyncAlert {
   key    String   @id
   sentAt DateTime @default(now())
 }
+
+/// Cài đặt hệ thống dạng khoá–giá trị (vd admin_password_hash)
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

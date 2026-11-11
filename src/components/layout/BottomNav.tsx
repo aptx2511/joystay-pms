@@ -12,7 +12,10 @@ import {
   RefreshCw,
   Tag,
   Wallet,
+  Lock,
+  LogIn,
 } from "lucide-react";
+import { PUBLIC_NAV, useAuth } from "@/lib/hooks/useAuth";
 
 const NAV_ITEMS = [
   { href: "/",           label: "Dashboard",  icon: LayoutDashboard },
@@ -28,6 +31,8 @@ const NAV_ITEMS = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const auth = useAuth();
+  if (pathname === "/login") return null;
   if (pathname?.startsWith("/t/") || pathname === "/s" || pathname?.startsWith("/s/")) return null; // trang lao công: không hiện menu quản trị
 
   return (
@@ -46,11 +51,17 @@ export default function BottomNav() {
                 active ? "text-amber-400" : "text-slate-400 active:text-slate-200"
               }`}
             >
-              <Icon size={20} strokeWidth={active ? 2.5 : 1.75} />
+              <span className="relative"><Icon size={20} strokeWidth={active ? 2.5 : 1.75} />
+                {auth && !auth.authed && !PUBLIC_NAV.has(href) && <Lock size={9} className="absolute -right-1.5 -top-1 text-slate-500" />}</span>
               <span className="text-[9px] font-medium leading-none whitespace-nowrap">{label}</span>
             </Link>
           );
         })}
+        {auth && !auth.authed && (
+          <Link href="/login" className="flex-1 min-w-[48px] flex flex-col items-center justify-center py-2 gap-0.5 text-amber-400">
+            <LogIn size={20} /><span className="text-[9px] font-medium leading-none whitespace-nowrap">Đăng nhập</span>
+          </Link>
+        )}
       </div>
     </nav>
   );

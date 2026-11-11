@@ -7,6 +7,7 @@ import Header from "@/components/layout/Header";
 import BookingForm from "@/components/bookings/BookingForm";
 import { Booking, SOURCE_META, STATUS_META, BookingSource, BookingStatus } from "@/types";
 import { nightCount, formatPrice } from "@/lib/utils";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 type Row = Booking & { confirmationCode?: string | null; room?: Booking["room"] & { roomNumber?: string | null } };
 
@@ -38,6 +39,8 @@ export default function BookingsPage() {
   const [formOpen,   setFormOpen]   = useState(false);
   const [editTarget, setEditTarget] = useState<Booking | undefined>(undefined);
   const [refreshKey, setRefreshKey] = useState(0);
+  const auth = useAuth();
+  const needLogin = () => { if (auth && !auth.authed) { if (confirm("Cần đăng nhập quản trị để thêm/sửa booking. Đăng nhập ngay?")) location.href = "/login?next=/bookings"; return true; } return false; };
 
   // ── Bộ lọc ────────────────────────────────────────────────────────────────
   const [search,   setSearch]   = useState("");
@@ -129,11 +132,13 @@ export default function BookingsPage() {
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
   function openEdit(booking: Booking) {
+    if (needLogin()) return;
     setEditTarget(booking);
     setFormOpen(true);
   }
 
   function openNew() {
+    if (needLogin()) return;
     setEditTarget(undefined);
     setFormOpen(true);
   }
