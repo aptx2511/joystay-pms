@@ -12,12 +12,14 @@ import {
   Sparkles,
   BedDouble,
   Tag,
+  Wallet,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/",           label: "Dashboard",   icon: LayoutDashboard },
   { href: "/bookings",   label: "Bookings",    icon: CalendarDays    },
   { href: "/revenue",    label: "Doanh thu",   icon: TrendingUp      },
+  { href: "/thu-chi",    label: "Thu chi",     icon: Wallet          },
   { href: "/gia-phong-trong", label: "Giá & trống", icon: Tag      },
   { href: "/luu-tru",    label: "Lưu trú",     icon: BedDouble       },
   { href: "/housekeeping", label: "Dọn phòng", icon: Sparkles        },

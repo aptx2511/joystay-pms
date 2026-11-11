@@ -27,6 +27,8 @@ model Room {
   bookings      Booking[]
   cleaningTasks CleaningTask[]
   rates         RoomRate[]
+  txns          Txn[]
+  fixedCosts    FixedCost[]
 }
 
 // ── Housekeeping (Ops 2.0 — Module 1) ─────────────────────────────────────────
@@ -182,4 +184,41 @@ model RoomRate {
 
   @@unique([roomId, date])
   @@index([date])
+}
+
+
+/// Thu chi (Ops — Tài chính). kind IN = tiền vào, OUT = chi ra. roomId null = chi phí chung.
+model Txn {
+  id        String   @id @default(cuid())
+  kind      String   // IN | OUT
+  date      DateTime // ngày phát sinh (UTC 00:00 ngày VN)
+  amount    Float    // luôn dương
+  category  String
+  roomId    String?
+  bookingId String?  // tiền về của booking nào (đối soát)
+  channel   String?  // AIRBNB | BOOKING | AGODA | DIRECT | CASH | TRANSFER
+  note      String?
+  source    String   @default("MANUAL") // MANUAL | CSV
+  ref       String?  // khoá chống nhập trùng khi import CSV
+  createdAt DateTime @default(now())
+
+  room Room? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  @@unique([source, ref])
+  @@index([date])
+  @@index([bookingId])
+}
+
+/// Chi phí cố định hằng tháng (tiền nhà, internet…) — tự cộng vào mỗi tháng từ startMonth
+model FixedCost {
+  id         String   @id @default(cuid())
+  name       String
+  amount     Float
+  category   String
+  roomId     String?
+  startMonth String   // YYYY-MM
+  endMonth   String?  // YYYY-MM (null = vẫn đang áp dụng)
+  createdAt  DateTime @default(now())
+
+  room Room? @relation(fields: [roomId], references: [id], onDelete: SetNull)
 }
