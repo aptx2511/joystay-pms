@@ -5,6 +5,7 @@ import { differenceInDays } from "date-fns";
 import { calcAutoPrice, BookingSource } from "@/types";
 import { generateCleaningTasks, newToken, vnToday } from "@/lib/housekeeping";
 import { ensurePortals, parseAirbnbDescription, purgeOldIds } from "@/lib/stay";
+import { checkBookingIntegrity } from "@/lib/sync-guard";
 
 type PlatformConfig = {
   source: BookingSource;
@@ -195,7 +196,16 @@ async function runSync() {
     errors.push(`Cổng khách: ${e instanceof Error ? e.message : String(e)}`);
   }
 
+  // Lá chắn: đơn nhảy phòng / trùng lịch → Telegram (mỗi cảnh báo 1 lần)
+  let alerts = 0;
+  try {
+    alerts = (await checkBookingIntegrity()).length;
+  } catch (e) {
+    errors.push(`Cảnh báo lịch: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   return NextResponse.json({
+    alerts,
     message: `Sync xong: ${imported} lượt ở, ${blocked} khoá lịch, ${cancelled} huỷ, ${skipped} lỗi.${housekeeping}`,
     imported, blocked, cancelled, skipped,
     ...(errors.length > 0 && { errors }),
