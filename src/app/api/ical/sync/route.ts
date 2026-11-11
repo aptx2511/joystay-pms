@@ -6,6 +6,7 @@ import { calcAutoPrice, BookingSource } from "@/types";
 import { generateCleaningTasks, newToken, vnToday } from "@/lib/housekeeping";
 import { ensurePortals, parseAirbnbDescription, purgeOldIds } from "@/lib/stay";
 import { checkBookingIntegrity } from "@/lib/sync-guard";
+import { migrateMovedBookings } from "@/lib/booking-move";
 
 type PlatformConfig = {
   source: BookingSource;
@@ -179,6 +180,13 @@ async function runSync() {
         cancelled += gone.length;
       }
     }
+  }
+
+  // Đơn chuyển phòng: chuyển tiền đã thu, mã đặt, tên khách, cổng khách… sang bản ghi mới (trước lịch dọn & cổng khách)
+  try {
+    await migrateMovedBookings();
+  } catch (e) {
+    errors.push(`Chuyển phòng: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   let housekeeping = "";

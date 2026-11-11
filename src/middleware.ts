@@ -25,6 +25,7 @@ const PUBLIC_PREFIXES = [
   "/api/stay/lookup",    // khách tra cứu bằng mã đặt phòng + 4 số ĐT
   "/api/stay/t/",
   "/guide/",             // ảnh hướng dẫn tự nhận phòng
+  "/api/payments/sepay", // webhook SePay (tự kiểm tra "Apikey SEPAY_API_KEY")
 ];
 
 function isPublic(pathname: string, method: string) {
