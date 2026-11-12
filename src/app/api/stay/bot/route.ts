@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { arrivalsDigest, pendingCodes } from "@/lib/stay";
+import { arrivalsDigest, codesAudit, pendingCodes } from "@/lib/stay";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,8 @@ export async function GET(request: Request) {
   try {
     if (kind === "pending-codes") return NextResponse.json({ items: await pendingCodes() });
     if (kind === "arrivals") return NextResponse.json(await arrivalsDigest());
-    return NextResponse.json({ error: "kind = pending-codes | arrivals" }, { status: 400 });
+    if (kind === "codes-audit") return NextResponse.json({ items: await codesAudit() });
+    return NextResponse.json({ error: "kind = pending-codes | arrivals | codes-audit" }, { status: 400 });
   } catch (e) {
     console.error("[GET /api/stay/bot]", e);
     return NextResponse.json({ error: "Lỗi máy chủ" }, { status: 500 });

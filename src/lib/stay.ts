@@ -210,6 +210,39 @@ export async function pendingCodes() {
     }));
 }
 
+/**
+ * Cho JoyBot đối chiếu mã TTLock với booking (11/2026): booking bị HUỶ → xoá mã; đổi ngày → sửa hạn mã.
+ * Trả các cổng khách có mã do TTLock cấp, booking còn liên quan (chưa trả phòng quá 1 ngày, hoặc huỷ ≤ 30 ngày).
+ * sharedWithActive: mã này cũng đang thuộc 1 booking khác còn hiệu lực ở cùng phòng → KHÔNG được xoá trên khoá.
+ */
+export async function codesAudit() {
+  const today = vnToday();
+  const portals = await prisma.stayPortal.findMany({
+    where: {
+      codesSource: "TTLOCK",
+      booking: { OR: [
+        { status: { in: ["CONFIRMED", "PENDING"] }, checkOut: { gte: new Date(today.getTime() - DAY) } },
+        { status: { in: ["CANCELLED", "BLOCKED"] }, updatedAt: { gte: new Date(today.getTime() - 30 * DAY) } },
+      ] },
+    },
+    include: { booking: { include: { room: true } } },
+  });
+  const withCodes = portals.filter((p) => doorCodesOf(p).length);
+  const activeKeys = new Set(withCodes.filter((p) => ["CONFIRMED", "PENDING"].includes(p.booking.status))
+    .flatMap((p) => doorCodesOf(p).map((c) => `${p.booking.roomId}|${c.code}`)));
+  return withCodes.map((p) => {
+    const b = p.booking;
+    const active = ["CONFIRMED", "PENDING"].includes(b.status);
+    return {
+      bookingId: b.id, code: b.confirmationCode ?? b.id.slice(-6).toUpperCase(), altCode: b.id.slice(-6).toUpperCase(),
+      roomNo: b.room.roomNumber, guestName: b.guestName, status: b.status, active,
+      checkIn: dayKey(b.checkIn), checkOut: dayKey(b.checkOut),
+      codes: doorCodesOf(p).map((c) => ({ door: c.door, code: c.code })),
+      sharedWithActive: !active && doorCodesOf(p).some((c) => activeKeys.has(`${b.roomId}|${c.code}`)),
+    };
+  });
+}
+
 // ── DEMO: /s/demo?at=<bước> — dữ liệu giả, không ghi DB, không gửi Telegram ──────
 export const DEMO_TOKEN = "demo";
 export const DEMO_STEPS: { key: string; label: string; dayOffset: number; time: string; idSent: boolean }[] = [
