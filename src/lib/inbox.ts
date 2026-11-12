@@ -190,3 +190,17 @@ function setup() {
 }
 `;
 }
+
+/** Đọc lại email đã lưu bằng bộ đọc mới nhất (vd sau khi thêm Agoda / chỉnh mẫu) — mọi email chưa MATCHED trong 45 ngày */
+export async function reparseEmails() {
+  const list = await prisma.inboundEmail.findMany({ where: { status: { not: "MATCHED" }, createdAt: { gte: new Date(Date.now() - 45 * 86_400_000) } }, take: 200 });
+  let matched = 0;
+  for (const r of list) {
+    const p = parseEmail(r.fromAddr, r.subject, r.body);
+    const ignore = p.channel === "OTHER" || p.kind === "OTHER" || p.kind === "MESSAGE";
+    const bookingId = ignore ? null : await apply(p, r.replyTo).catch(() => null);
+    if (bookingId) matched++;
+    await prisma.inboundEmail.update({ where: { id: r.id }, data: { channel: p.channel, kind: p.kind, parsed: p as object, bookingId, status: ignore ? "IGNORED" : bookingId ? "MATCHED" : "UNMATCHED" } });
+  }
+  return { checked: list.length, matched };
+}
