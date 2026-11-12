@@ -1,0 +1,37 @@
+{
+  "name": "joystay-joybot",
+  "version": "1.0.0",
+  "description": "JoyBot — AI Conversational & Operator Agent for Joystay Vietnam",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test:bot": "tsx src/test-chat.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.100.1",
+    "axios": "^1.7.0",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.19.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "form-data": "^4.0.5",
+    "node-fetch": "^3.3.2",
+    "openai": "^6.33.0",
+    "replicate": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "@types/express": "^4.17.21",
+    "@types/fluent-ffmpeg": "^2.1.28",
+    "@types/node": "^20.0.0",
+    "@types/node-fetch": "^2.6.13",
+    "sharp": "^0.34.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}
