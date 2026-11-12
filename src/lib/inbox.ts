@@ -110,7 +110,8 @@ async function apply(p: Parsed, replyTo: string | null): Promise<string | null> 
   if (p.guestName && (PLACEHOLDER.test(booking.guestName) || booking.guestName === p.guestName)) data.guestName = p.guestName.slice(0, 80);
   if (p.code && !booking.confirmationCode) data.confirmationCode = p.code;
   const net = p.payout ?? (p.total && p.channel === "BOOKING" ? Math.round(p.total * 0.85) : p.total && p.channel === "AGODA" ? Math.round(p.total * 0.82) : null); // trừ hoa hồng ~15% / ~18%
-  if (net && booking.priceSource !== "MANUAL" && booking.priceSource !== "IMPORT") { data.totalPrice = net; data.priceSource = "EMAIL"; }
+  // Airbnb: tiền thật do script "Joystay - Email Airbnb to PMS" (11/11) + /api/finance/airbnb-payout lo (có chốt chặn số đêm) → ở đây KHÔNG ghi tiền Airbnb
+  if (net && p.channel !== "AIRBNB" && booking.priceSource !== "MANUAL" && booking.priceSource !== "IMPORT") { data.totalPrice = net; data.priceSource = "EMAIL"; }
   if (Object.keys(data).length) await prisma.booking.update({ where: { id: booking.id }, data });
   if (p.guests || replyTo) {
     await prisma.stayPortal.upsert({
@@ -153,6 +154,7 @@ export function appsScript(token: string, base: string) {
   return `/**
  * Joystay PMS — chuyển email đặt phòng Airbnb / Booking.com / Agoda sang PMS (chạy trong Gmail của bạn).
  * Có nhiều hộp Gmail (vd 1 hộp nhận Airbnb, 1 hộp nhận Booking/Agoda) → cài CÙNG đoạn mã này vào MỖI tài khoản.
+ * LUÔN tạo DỰ ÁN MỚI — KHÔNG dán đè vào dự án "Joystay - Email Airbnb to PMS" có sẵn (hàm setup xoá hết trigger của dự án đang dán).
  * Cách cài: dán toàn bộ đoạn này vào script.google.com → Lưu → chọn hàm "setup" → Chạy → Cho phép.
  */
 const PMS_URL = '${base}/api/inbox/email';

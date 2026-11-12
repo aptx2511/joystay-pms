@@ -28,6 +28,7 @@ export default function EmailPage() {
               {(
                 <ol className="text-sm text-gray-700 mt-2 space-y-1 list-decimal pl-5">
                   <li>Mở <a className="underline text-sky-700" href="https://script.google.com/home/projects/create" target="_blank" rel="noreferrer">script.google.com → Dự án mới</a> bằng tài khoản Gmail nhận email Airbnb/Booking/Agoda. <b>Nếu Airbnb và Booking/Agoda về 2 Gmail khác nhau: làm các bước này ở CẢ 2 tài khoản</b> (cùng 1 đoạn mã).</li>
+                  <li>⚠️ Luôn tạo <b>Dự án mới</b> — không dán đè vào dự án <i>“Joystay - Email Airbnb to PMS”</i> đã cài hôm 11/11 (dự án đó lo tiền thật Airbnb, giữ nguyên).</li>
                   <li>Bấm <b>Sao chép đoạn mã</b> bên dưới → xoá hết nội dung có sẵn → dán vào → bấm 💾 Lưu.</li>
                   <li>Chọn hàm <b>setup</b> ở thanh trên → bấm <b>▶ Chạy</b> → <b>Cho phép</b> (Google hỏi quyền đọc Gmail &amp; gửi dữ liệu ra ngoài — chỉ gửi email từ Airbnb/Booking sang PMS của bạn).</li>
                   <li>Xong. Cứ 10 phút script tự chuyển email mới; quay lại trang này sẽ thấy danh sách.</li>
