@@ -35,7 +35,7 @@ function after(text: string, labels: RegExp, max = 120) {
 }
 
 export interface Parsed {
-  channel: "AIRBNB" | "BOOKING" | "OTHER"; kind: "NEW" | "CANCEL" | "CHANGE" | "PAYOUT" | "MESSAGE" | "OTHER";
+  channel: "AIRBNB" | "BOOKING" | "AGODA" | "OTHER"; kind: "NEW" | "CANCEL" | "CHANGE" | "PAYOUT" | "MESSAGE" | "OTHER";
   code?: string | null; guestName?: string | null; guests?: number | null; payout?: number | null; total?: number | null;
   checkIn?: string | null; roomHint?: string | null;
 }
@@ -64,6 +64,21 @@ export function parseEmail(from: string, subject: string, body: string): Parsed 
     const checkIn = VN_MONTH(after(b, /(nhận phòng|check-in|checkin)/i, 60) ?? "") ?? null;
     return { channel: "AIRBNB", kind, code, guestName: name, guests, payout, checkIn };
   }
+  if (f.includes("agoda")) {
+    const kind: Parsed["kind"] = /hủy|huỷ|cancel/i.test(s) ? "CANCEL" : /thay đổi|amend|modif|changed/i.test(s) ? "CHANGE"
+      : /xác nhận|confirm|đặt phòng mới|new booking|booking id/i.test(s) ? "NEW" : /tin nhắn|message/i.test(s) ? "MESSAGE" : "OTHER";
+    const code = (s.match(/\b(\d{8,11})\b/) ?? b.match(/(?:booking id|mã đặt phòng|số đặt phòng|booking no)\D{0,20}(\d{8,11})/i) ?? [])[1] ?? null;
+    const nameTxt = after(b, /(tên khách|guest name|customer name|tên khách hàng)\s*:?\s*/i, 60);
+    const guestName = nameTxt ? nameTxt.split(/\n|\s{2,}|\|/)[0].trim() || null : null;
+    const guests = Number((b.match(/(\d{1,2})\s*(?:người lớn|khách|adults?|guests?)\b/i) ?? [])[1]) || null;
+    const netTxt = after(b, /(net rate|số tiền thực nhận|giá thực nhận|amount to (?:be )?(?:paid|receive))\s*:?\s*/i, 60);
+    const totalTxt = after(b, /(tổng giá|tổng tiền|total)\s*:?\s*/i, 60);
+    const net = netTxt ? money(netTxt) : null;
+    const total = totalTxt ? money(totalTxt) : null;
+    const checkIn = VN_MONTH(after(b, /(nhận phòng|check-in|ngày đến|arrival)/i, 60) ?? "") ?? VN_MONTH(s);
+    const roomHint = (b.match(/(cozy|midnight|pop art|tropical|black ?& ?white|parisian|matcha)[^\n]{0,40}/i) ?? [])[0] ?? null;
+    return { channel: "AGODA", kind, code, guestName, guests, payout: net, total, checkIn, roomHint };
+  }
   if (f.includes("booking.com")) {
     const kind: Parsed["kind"] = /hủy|huỷ|cancel/i.test(s) ? "CANCEL" : /thay đổi|modif|changed/i.test(s) ? "CHANGE"
       : /đặt phòng mới|new booking|new reservation|xác nhận đặt phòng|booking confirmation/i.test(s) ? "NEW" : /tin nhắn|message|đã gửi cho bạn/i.test(s) ? "MESSAGE" : "OTHER";
@@ -84,9 +99,9 @@ export function parseEmail(from: string, subject: string, body: string): Parsed 
 async function apply(p: Parsed, replyTo: string | null): Promise<string | null> {
   if (p.channel === "OTHER") return null;
   let booking = p.code ? await prisma.booking.findFirst({ where: { confirmationCode: p.code, status: { not: "CANCELLED" } }, orderBy: { createdAt: "desc" } }) : null;
-  if (!booking && p.channel === "BOOKING" && p.checkIn) {
+  if (!booking && (p.channel === "BOOKING" || p.channel === "AGODA") && p.checkIn) {
     const day = new Date(`${p.checkIn}T00:00:00.000Z`);
-    const cands = await prisma.booking.findMany({ where: { source: "BOOKING", checkIn: day, status: { in: ["CONFIRMED", "PENDING"] } }, include: { room: true } });
+    const cands = await prisma.booking.findMany({ where: { source: p.channel, checkIn: day, status: { in: ["CONFIRMED", "PENDING"] } }, include: { room: true } });
     const hint = (p.roomHint ?? "").toLowerCase();
     booking = cands.find((c) => hint && hint.includes(c.room.name.toLowerCase().split(" ").slice(0, 2).join(" "))) ?? (cands.length === 1 ? cands[0] : null);
   }
@@ -94,7 +109,7 @@ async function apply(p: Parsed, replyTo: string | null): Promise<string | null> 
   const data: Record<string, unknown> = {};
   if (p.guestName && (PLACEHOLDER.test(booking.guestName) || booking.guestName === p.guestName)) data.guestName = p.guestName.slice(0, 80);
   if (p.code && !booking.confirmationCode) data.confirmationCode = p.code;
-  const net = p.payout ?? (p.total && p.channel === "BOOKING" ? Math.round(p.total * 0.85) : null); // Booking: trừ ~15% hoa hồng
+  const net = p.payout ?? (p.total && p.channel === "BOOKING" ? Math.round(p.total * 0.85) : p.total && p.channel === "AGODA" ? Math.round(p.total * 0.82) : null); // trừ hoa hồng ~15% / ~18%
   if (net && booking.priceSource !== "MANUAL" && booking.priceSource !== "IMPORT") { data.totalPrice = net; data.priceSource = "EMAIL"; }
   if (Object.keys(data).length) await prisma.booking.update({ where: { id: booking.id }, data });
   if (p.guests || replyTo) {
@@ -136,12 +151,13 @@ export async function rematchEmails() {
 
 export function appsScript(token: string, base: string) {
   return `/**
- * Joystay PMS — chuyển email đặt phòng Airbnb / Booking.com sang PMS (chạy trong Gmail của bạn).
+ * Joystay PMS — chuyển email đặt phòng Airbnb / Booking.com / Agoda sang PMS (chạy trong Gmail của bạn).
+ * Có nhiều hộp Gmail (vd 1 hộp nhận Airbnb, 1 hộp nhận Booking/Agoda) → cài CÙNG đoạn mã này vào MỖI tài khoản.
  * Cách cài: dán toàn bộ đoạn này vào script.google.com → Lưu → chọn hàm "setup" → Chạy → Cho phép.
  */
 const PMS_URL = '${base}/api/inbox/email';
 const TOKEN = '${token}';
-const QUERY = '(from:airbnb.com OR from:booking.com) newer_than:7d';
+const QUERY = '(from:airbnb.com OR from:booking.com OR from:agoda.com OR from:agoda-messaging.com) newer_than:7d';
 
 function sync() {
   const props = PropertiesService.getScriptProperties();

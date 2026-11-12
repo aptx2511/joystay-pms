@@ -25,9 +25,9 @@ export default function EmailPage() {
           <>
             <section className={`rounded-xl border p-4 ${total ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
               <p className="font-semibold flex items-center gap-2"><Mail size={16} /> {total ? `Đang chạy — đã nhận ${total} email` : "Chưa kết nối Gmail"}</p>
-              {!total && (
+              {(
                 <ol className="text-sm text-gray-700 mt-2 space-y-1 list-decimal pl-5">
-                  <li>Mở <a className="underline text-sky-700" href="https://script.google.com/home/projects/create" target="_blank" rel="noreferrer">script.google.com → Dự án mới</a> bằng tài khoản Gmail nhận email Airbnb/Booking.</li>
+                  <li>Mở <a className="underline text-sky-700" href="https://script.google.com/home/projects/create" target="_blank" rel="noreferrer">script.google.com → Dự án mới</a> bằng tài khoản Gmail nhận email Airbnb/Booking/Agoda. <b>Nếu Airbnb và Booking/Agoda về 2 Gmail khác nhau: làm các bước này ở CẢ 2 tài khoản</b> (cùng 1 đoạn mã).</li>
                   <li>Bấm <b>Sao chép đoạn mã</b> bên dưới → xoá hết nội dung có sẵn → dán vào → bấm 💾 Lưu.</li>
                   <li>Chọn hàm <b>setup</b> ở thanh trên → bấm <b>▶ Chạy</b> → <b>Cho phép</b> (Google hỏi quyền đọc Gmail &amp; gửi dữ liệu ra ngoài — chỉ gửi email từ Airbnb/Booking sang PMS của bạn).</li>
                   <li>Xong. Cứ 10 phút script tự chuyển email mới; quay lại trang này sẽ thấy danh sách.</li>
@@ -50,7 +50,7 @@ export default function EmailPage() {
                   <div key={r.id} className="py-2 text-sm flex items-start gap-2">
                     <span className="text-[11px] text-gray-400 w-14 shrink-0">{new Date(r.receivedAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate">{r.channel === "AIRBNB" ? "Airbnb" : r.channel === "BOOKING" ? "Booking" : r.channel} · {KIND[r.kind] ?? r.kind} · {r.subject}</p>
+                      <p className="truncate">{r.channel === "AIRBNB" ? "Airbnb" : r.channel === "BOOKING" ? "Booking" : r.channel === "AGODA" ? "Agoda" : r.channel} · {KIND[r.kind] ?? r.kind} · {r.subject}</p>
                       {r.parsed && (r.parsed.code || r.parsed.guestName) && (
                         <p className="text-xs text-gray-500">{[r.parsed.code, r.parsed.guestName, r.parsed.guests ? `${r.parsed.guests} khách` : null, r.parsed.payout ? `nhận ${Math.round(r.parsed.payout / 1000)}k` : r.parsed.total ? `tổng ${Math.round(r.parsed.total / 1000)}k` : null].filter(Boolean).join(" · ")}</p>
                       )}
