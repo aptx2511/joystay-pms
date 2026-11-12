@@ -254,3 +254,18 @@ model InboundEmail {
 
   @@index([status])
 }
+
+/// Giá đang bán trên từng kênh (quét hằng ngày từ extranet Airbnb / Booking.com / Agoda)
+model ChannelPrice {
+  id        String   @id @default(cuid())
+  roomId    String
+  date      DateTime // đêm (UTC 00:00 ngày VN)
+  channel   String   // AIRBNB | AIRBNB2 (listing thứ 2 của phòng) | BOOKING | AGODA
+  price     Float    // giá khách thấy (sau khuyến mãi của kênh nếu có)
+  listPrice Float?   // giá niêm yết trước khuyến mãi
+  available Boolean?
+  scrapedAt DateTime @default(now())
+
+  @@unique([roomId, date, channel])
+  @@index([date])
+}

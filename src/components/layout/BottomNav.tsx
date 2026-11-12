@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Tag,
   Wallet,
+  BarChart3,
   Lock,
   LogIn,
 } from "lucide-react";
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: "/revenue",    label: "Doanh thu",  icon: TrendingUp      },
   { href: "/thu-chi",    label: "Thu chi",     icon: Wallet          },
   { href: "/gia-phong-trong", label: "Giá/Trống", icon: Tag       },
+  { href: "/gia-kenh",   label: "Giá kênh", icon: BarChart3      },
   { href: "/luu-tru",    label: "Lưu trú",     icon: BedDouble       },
   { href: "/housekeeping", label: "Dọn phòng", icon: Sparkles       },
   { href: "/attendance", label: "Chấm công",  icon: ClipboardCheck  },
