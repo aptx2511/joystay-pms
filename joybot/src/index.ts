@@ -14,6 +14,7 @@ import { syncOtaCalendars } from "./booking/pms";
 import { bookableRooms } from "./booking/rooms";
 import { housekeepingTick } from "./ops/housekeeping";
 import { stayTick } from "./ops/stay";
+import { vacancyTick } from "./ops/vacancy";
 
 type RawReq = Request & { rawBody?: Buffer };
 
@@ -120,6 +121,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 setInterval(() => void expireHolds(), 60_000);
 setInterval(() => void syncOtaCalendars(), config.booking.otaSyncMinutes * 60_000);
 setInterval(() => void stayTick(), 60_000); // cổng khách: cấp mã TTLock mỗi 15' · bản tin khách đến 07:30 & 20:00
+setInterval(() => void vacancyTick(), 60_000); // bản tin phòng trống + đề xuất 08:00 (giờ VN)
 setInterval(() => void housekeepingTick(), 60_000); // lịch dọn: CN 20:00 · 07:30 · 14:30 (giờ VN)
 
 if (require.main === module) {
