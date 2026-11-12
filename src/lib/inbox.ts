@@ -47,6 +47,9 @@ const VN_MONTH = (s: string) => {
   const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
   m = s.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/i);
   if (m) return `${m[3]}-${String(months.indexOf(m[1].toLowerCase()) + 1).padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+  // Agoda: "3-Dec-2026"
+  m = s.match(/(\d{1,2})-(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*-(\d{4})/i);
+  if (m) return `${m[3]}-${String(months.indexOf(m[2].toLowerCase().slice(0, 3)) + 1).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   return null;
 };
 
