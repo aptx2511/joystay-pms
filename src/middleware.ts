@@ -30,6 +30,7 @@ const PUBLIC_PREFIXES = [
   "/api/payments/sepay", // webhook SePay (tự kiểm tra "Apikey SEPAY_API_KEY")
   "/login",
   "/api/auth/",          // đăng nhập / đăng xuất / tạo mật khẩu lần đầu
+  "/api/inbox/email",    // Apps Script Gmail gửi email đặt phòng (tự kiểm tra x-inbox-token)
 ];
 // Trang xem công khai (ai có link): Dashboard + Bookings (chỉ đọc)
 const PUBLIC_PAGES = new Set(["/", "/bookings"]);

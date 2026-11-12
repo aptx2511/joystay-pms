@@ -7,6 +7,7 @@ import { generateCleaningTasks, newToken, vnToday } from "@/lib/housekeeping";
 import { ensurePortals, parseAirbnbDescription, purgeOldIds } from "@/lib/stay";
 import { checkBookingIntegrity } from "@/lib/sync-guard";
 import { migrateMovedBookings } from "@/lib/booking-move";
+import { rematchEmails } from "@/lib/inbox";
 
 type PlatformConfig = {
   source: BookingSource;
@@ -104,7 +105,7 @@ async function runSync() {
         try {
           if (externalId) {
             if (existing) {
-              const keepPrice = existing.priceSource === "MANUAL" || existing.priceSource === "IMPORT";
+              const keepPrice = existing.priceSource === "MANUAL" || existing.priceSource === "IMPORT" || existing.priceSource === "EMAIL";
               await prisma.booking.update({
                 where: { id: existing.id },
                 data: {
@@ -200,6 +201,7 @@ async function runSync() {
   try {
     await ensurePortals();
     await purgeOldIds();
+    await rematchEmails(); // email đặt phòng về trước iCal → khớp lại
   } catch (e) {
     errors.push(`Cổng khách: ${e instanceof Error ? e.message : String(e)}`);
   }

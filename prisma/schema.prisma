@@ -235,3 +235,22 @@ model AppSetting {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+/// Email đặt phòng chuyển từ Gmail (Apps Script) → PMS đọc tên khách, mã, số khách, tiền thực nhận
+model InboundEmail {
+  id         String   @id @default(cuid())
+  messageId  String   @unique
+  channel    String   // AIRBNB | BOOKING | OTHER
+  kind       String   // NEW | CANCEL | CHANGE | PAYOUT | MESSAGE | OTHER
+  fromAddr   String
+  replyTo    String?
+  subject    String
+  receivedAt DateTime
+  body       String
+  parsed     Json?
+  bookingId  String?
+  status     String   @default("UNMATCHED") // MATCHED | UNMATCHED | IGNORED
+  createdAt  DateTime @default(now())
+
+  @@index([status])
+}

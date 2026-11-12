@@ -172,6 +172,7 @@ export default function SettingsPage() {
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium disabled:opacity-60"
           >
             <RefreshCw size={15} className={syncing ? "animate-spin" : ""} />
+      <a href="/email" className="mx-4 md:mx-5 mt-4 block rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">📧 <b>Email đặt phòng</b> — kết nối Gmail để PMS tự lấy tên khách, mã đặt phòng, số khách, tiền thực nhận →</a>
             {syncing ? "Syncing…" : "Sync All Rooms"}
           </button>
         }
