@@ -17,8 +17,8 @@ const TAG_RE = new RegExp(`\\[TT (${PAY_PREFIX}\\d{6})(?: =(\\d+))?\\]`);
 export const isOta = (source: string) => source !== "DIRECT" && source !== "OFFLINE";
 export const WEB_TAG = "[WEB]";
 export const WEB_HOLD_MINUTES = Number(process.env.WEB_HOLD_MINUTES || 60);
-/** Đơn web: đã trả ≥ tỉ lệ này của tổng → tự xác nhận */
-export const CONFIRM_RATIO = Number(process.env.WEB_CONFIRM_RATIO || 0.5);
+/** Đơn web: đã trả ≥ tỉ lệ này của tổng → tự xác nhận (thiếu → báo Telegram, không huỷ) */
+export const CONFIRM_RATIO = Number(process.env.WEB_CONFIRM_RATIO || 1); // website thu trước 100% (13/11)
 
 export function bank() {
   const bankId = (process.env.BANK_ID || "").trim();
