@@ -56,7 +56,9 @@ const VN_MONTH = (s: string) => {
 export function parseEmail(from: string, subject: string, body: string): Parsed {
   const f = from.toLowerCase(), s = clean(subject), b = clean(body);
   if (f.includes("airbnb")) {
-    const kind: Parsed["kind"] = /hủy|huỷ|cancel/i.test(s) ? "CANCEL" : /thay đổi|altered|changed|cập nhật đặt phòng/i.test(s) ? "CHANGE"
+    // "RE: Reservation for …" / "Pre-approval" / "enquiry" = hội thoại với khách, KHÔNG phải đơn mới
+    const chat = /^\s*(re|trả lời)\s*:|pre-approval|enquiry|inquiry|yêu cầu đặt/i.test(s);
+    const kind: Parsed["kind"] = chat ? "MESSAGE" : /hủy|huỷ|cancel/i.test(s) ? "CANCEL" : /thay đổi|altered|changed|cập nhật đặt phòng/i.test(s) ? "CHANGE"
       : /xác nhận|confirmed|đặt phòng mới|new booking|reservation/i.test(s) ? "NEW" : /thanh toán|payout|đã gửi.*tiền/i.test(s) ? "PAYOUT" : /tin nhắn|message/i.test(s) ? "MESSAGE" : "OTHER";
     const code = (s + " " + b).match(/\bHM[A-Z0-9]{8}\b/)?.[0] ?? null;
     const name = s.match(/(?:xác nhận|confirmed|hủy|huỷ|canceled|cancelled)\s*[-–:]\s*(.+?)\s+(?:sẽ đến|đến vào|đến|arrives|arriving|nhận phòng)\b/i)?.[1]?.trim()
