@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const JOYBOT_URL = (process.env.JOYBOT_URL || "https://joystay-joybot-production.up.railway.app").replace(/\/$/, "");
+const JOYBOT_URL = (process.env.JOYBOT_URL || "https://joybot-production-186f.up.railway.app").replace(/\/$/, "");
 const DEBOUNCE_MS = 60_000;
 
 /**
