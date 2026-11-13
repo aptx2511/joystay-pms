@@ -13,7 +13,7 @@ import { expireHolds } from "./booking/service";
 import { syncOtaCalendars } from "./booking/pms";
 import { bookableRooms } from "./booking/rooms";
 import { housekeepingTick } from "./ops/housekeeping";
-import { stayTick } from "./ops/stay";
+import { issuePendingCodes, stayTick } from "./ops/stay";
 import { vacancyTick } from "./ops/vacancy";
 
 type RawReq = Request & { rawBody?: Buffer };
@@ -109,6 +109,16 @@ app.post("/chat", async (req, res, next) => {
 app.post("/webhook/telegram", telegramWebhook);
 app.post("/webhook/sepay", sepayWebhook);
 
+// PMS báo vừa có đơn mới / huỷ / đổi (email OTA → đồng bộ ngay) → cấp mã cửa ngay, không chờ lượt 15'
+app.post("/hooks/pms-changed", (req, res) => {
+  if (!config.pms.cronSecret || req.headers.authorization !== `Bearer ${config.pms.cronSecret}`) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  res.status(202).json({ ok: true });
+  void issuePendingCodes();
+});
+
 // ── Autopilot (giữ nguyên) ──────────────────────────────────────────────────
 app.use("/autopilot", autopilotRouter);
 
@@ -119,7 +129,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 // ── Tác vụ nền ───────────────────────────────────────────────────────────────
 setInterval(() => void expireHolds(), 60_000);
-setInterval(() => void syncOtaCalendars(), config.booking.otaSyncMinutes * 60_000);
+setInterval(async () => { if (await syncOtaCalendars()) await issuePendingCodes(); }, config.booking.otaSyncMinutes * 60_000); // đồng bộ xong → cấp mã luôn
 setInterval(() => void stayTick(), 60_000); // cổng khách: cấp mã TTLock mỗi 15' · bản tin khách đến 07:30 & 20:00
 setInterval(() => void vacancyTick(), 60_000); // bản tin phòng trống + đề xuất 08:00 (giờ VN)
 setInterval(() => void housekeepingTick(), 60_000); // lịch dọn: CN 20:00 · 07:30 · 14:30 (giờ VN)

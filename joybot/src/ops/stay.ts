@@ -26,7 +26,7 @@ const DIGEST_TIMES = (process.env.STAY_DIGEST_TIMES ?? "07:30,20:00").split(",")
 
 interface Pending {
   bookingId: string; code: string; roomNo: string | null; roomName: string; guestName: string; checkIn: string; checkOut: string;
-  phoneLast4?: string | null; source?: string;
+  phoneLast4?: string | null; source?: string; portalUrl?: string | null; payDue?: number | null;
 }
 
 const FLOOR: Record<string, string> = { "1": "ground floor / tầng trệt", "2": "1st floor / lầu 1", "3": "2nd floor / lầu 2", "4": "3rd floor / lầu 3" };
@@ -39,6 +39,7 @@ function guestCodeMessage(p: Pending, code: string) {
     `It opens the main door, the inner gate and your room door, valid from 12:00 ${ddmm(p.checkIn)} to 12:00 ${ddmm(p.checkOut)}. Check-in from 15:00.`,
     `Address: 382/23 Nguyễn Thị Minh Khai, Ward 5, District 3, HCMC — https://maps.app.goo.gl/1dreN6KLAHZEqRuc6`,
     `To unlock: touch the keypad to wake it, enter ${code} then press #.`,
+    ...(p.portalUrl ? [`Your stay page (check-in guide${p.payDue ? `, bank-transfer QR for ${p.payDue.toLocaleString("vi-VN")} VND` : ""}): ${p.portalUrl}`] : []),
     `Payment: cash or bank transfer only (card payment is not available). Hotline/WhatsApp: 0854 777 730.`,
     ``,
     `Mã cửa phòng ${p.roomNo}${fl ? ` (${fl.split(" / ")[1]}, chỉ có thang bộ)` : ""}: ${code} — mở cửa nhà, cổng trong và cửa phòng, hiệu lực 12:00 ${ddmm(p.checkIn)} → 12:00 ${ddmm(p.checkOut)}. Nhận phòng từ 15:00. Thanh toán tiền mặt hoặc chuyển khoản (không quẹt thẻ).`,

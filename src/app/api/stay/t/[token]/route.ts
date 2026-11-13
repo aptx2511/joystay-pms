@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { DEMO_TOKEN, demoView, findByToken, guestView, stayLine } from "@/lib/stay";
 import { tgNotify } from "@/lib/telegram";
 import { publicBaseUrl } from "@/lib/housekeeping";
+import { paymentView } from "@/lib/payment";
+
+const withPay = async (b: Parameters<typeof guestView>[0]) => ({ ...guestView(b), payment: await paymentView(b).catch(() => null) });
 
 type Params = { params: Promise<{ token: string }> };
 export const dynamic = "force-dynamic";
@@ -21,7 +24,7 @@ export async function GET(req: Request, { params }: Params) {
       ...(v.codes.length && !b.portal!.codesViewedAt && { codesViewedAt: now }),
     },
   });
-  return NextResponse.json(v);
+  return NextResponse.json({ ...v, payment: await paymentView(b).catch(() => null) });
 }
 
 /**
@@ -69,5 +72,5 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: "action không hợp lệ" }, { status: 400 });
   }
   const fresh = await findByToken(token);
-  return NextResponse.json(guestView(fresh!));
+  return NextResponse.json(await withPay(fresh!));
 }

@@ -8,6 +8,8 @@ import { ensurePortals, parseAirbnbDescription, purgeOldIds } from "@/lib/stay";
 import { checkBookingIntegrity } from "@/lib/sync-guard";
 import { migrateMovedBookings } from "@/lib/booking-move";
 import { rematchEmails } from "@/lib/inbox";
+import { WEB_HOLD_MINUTES, expireWebHolds } from "@/lib/payment";
+import { tgNotify } from "@/lib/telegram";
 
 type PlatformConfig = {
   source: BookingSource;
@@ -212,6 +214,16 @@ async function runSync() {
     await migrateMovedBookings();
   } catch (e) {
     errors.push(`Chuyển phòng: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Đơn website giữ chỗ quá hạn chưa có tiền → huỷ, nhả lịch (chạy trước lịch dọn)
+  try {
+    for (const b of await expireWebHolds()) {
+      cancelled++;
+      await tgNotify(`⌛ Huỷ đơn website ${b.guestName} · phòng ${b.room.roomNumber ?? b.room.name} · ${b.checkIn.toISOString().slice(0, 10)}→${b.checkOut.toISOString().slice(0, 10)}: quá ${WEB_HOLD_MINUTES}' chưa nhận tiền, lịch đã mở lại. Khách chuyển muộn → vào Bookings đổi lại "Xác nhận".`).catch(() => {});
+    }
+  } catch (e) {
+    errors.push(`Giữ chỗ web: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   let housekeeping = "";

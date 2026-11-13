@@ -162,12 +162,12 @@ export function appsScript(token: string, base: string) {
  */
 const PMS_URL = '${base}/api/inbox/email';
 const TOKEN = '${token}';
-const QUERY = '(from:airbnb.com OR from:booking.com OR from:agoda.com OR from:agoda-messaging.com) newer_than:7d';
+const QUERY = '(from:airbnb.com OR from:booking.com OR from:agoda.com OR from:agoda-messaging.com) newer_than:2d';
 
 function sync() {
   const props = PropertiesService.getScriptProperties();
   const seen = JSON.parse(props.getProperty('seen') || '[]');
-  const threads = GmailApp.search(QUERY, 0, 60);
+  const threads = GmailApp.search(QUERY, 0, 25);
   threads.forEach(function (t) {
     t.getMessages().forEach(function (m) {
       const id = m.getId();
@@ -188,7 +188,7 @@ function sync() {
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('sync').timeBased().everyMinutes(10).create();
+  ScriptApp.newTrigger('sync').timeBased().everyMinutes(5).create();
   sync();
 }
 `;

@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { tgNotify } from "@/lib/telegram";
 import { vnToday } from "@/lib/housekeeping";
+import { CONFIRM_RATIO, paidOf, payTarget } from "@/lib/payment";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,9 @@ export async function POST(request: Request) {
     where: { status: { in: ["CONFIRMED", "PENDING"] }, ...window },
     include: { room: { select: { roomNumber: true, name: true } } },
   });
-  let match = joy ? candidates.find((b) => (b.notes ?? "").toUpperCase().includes(`${prefix}${joy[1]}`)) : undefined;
+  // ranh giới số: JOY1234 (JoyBot) không được khớp nhầm JOY123456 (mã thanh toán web/cổng khách)
+  const codeRe = joy ? new RegExp(`${prefix}${joy[1]}(?!\\d)`) : null;
+  let match = codeRe ? candidates.find((b) => codeRe.test((b.notes ?? "").toUpperCase())) : undefined;
   let how = joy ? `mã ${prefix}${joy[1]}` : "";
   if (!match) {
     match = candidates.find((b) => b.confirmationCode && b.confirmationCode.length >= 6 && text.includes(b.confirmationCode.toUpperCase()));
@@ -64,11 +67,11 @@ export async function POST(request: Request) {
   // 2) Khớp theo số tiền: đúng 1 đơn chưa thu (không phải Airbnb) có tổng tiền hoặc cọc 50% bằng số tiền về
   if (!match) {
     const paid = await prisma.txn.groupBy({ by: ["bookingId"], where: { kind: "IN", bookingId: { in: candidates.map((b) => b.id) } }, _sum: { amount: true } });
-    const paidOf = new Map<string, number>(paid.map((p: { bookingId: string | null; _sum: { amount: number | null } }) => [p.bookingId!, p._sum.amount ?? 0]));
+    const paidMap = new Map<string, number>(paid.map((p: { bookingId: string | null; _sum: { amount: number | null } }) => [p.bookingId!, p._sum.amount ?? 0]));
     const near = (x: number) => Math.abs(x - amount) <= 1000;
     const hits = candidates.filter((b) => {
       if (b.source === "AIRBNB" || !b.totalPrice) return false;
-      const remaining = b.totalPrice - (paidOf.get(b.id) ?? 0);
+      const remaining = b.totalPrice - (paidMap.get(b.id) ?? 0);
       return remaining > 0 && (near(b.totalPrice) || near(remaining) || near(Math.round(b.totalPrice / 2)));
     });
     if (hits.length === 1) { match = hits[0]; how = "khớp số tiền"; }
@@ -84,10 +87,21 @@ export async function POST(request: Request) {
   });
 
   if (match) {
+    // Đơn chờ (website / cổng khách) đã trả ≥ CONFIRM_RATIO tổng → tự xác nhận
+    let confirmed = "";
+    if (match.status === "PENDING" && match.source === "DIRECT" && process.env.AUTO_CONFIRM_ON_PAYMENT !== "false") {
+      const paid = await paidOf(match.id);
+      if (!match.totalPrice || paid >= match.totalPrice * CONFIRM_RATIO - 1000) {
+        await prisma.booking.update({ where: { id: match.id }, data: { status: "CONFIRMED" } });
+        confirmed = " ✅ Đơn đã tự chuyển sang XÁC NHẬN.";
+      }
+    }
+    const target = payTarget(match);
+    const left = target ? Math.max(0, target - (await paidOf(match.id))) : 0;
     await tgNotify(
       `💰 Đã thu ${vnd(amount)} — ${match.guestName}, phòng ${match.room.roomNumber ?? match.room.name}, ` +
       `${match.checkIn.toISOString().slice(5, 10)}→${match.checkOut.toISOString().slice(5, 10)} (${how}). ` +
-      `Tổng đơn ${vnd(match.totalPrice ?? 0)}.`,
+      (target ? `Cần thu ${vnd(target)}${left > 1000 ? `, còn ${vnd(left)}` : ", đã đủ"}.` : `Tổng đơn ${vnd(match.totalPrice ?? 0)}.`) + confirmed,
     );
   } else {
     await tgNotify(

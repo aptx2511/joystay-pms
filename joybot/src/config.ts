@@ -24,7 +24,7 @@ export const config = {
   booking: {
     depositPercent: num("DEPOSIT_PERCENT", 50),
     holdMinutes: num("HOLD_MINUTES", 30),
-    otaSyncMinutes: num("OTA_SYNC_MINUTES", 15),
+    otaSyncMinutes: num("OTA_SYNC_MINUTES", 10),
     codePrefix: env("BOOKING_CODE_PREFIX", "JOY"),
     // Tự xác nhận khi SePay báo tiền về đủ (true) — nếu false chỉ báo Telegram để chủ bấm
     autoConfirmOnPayment: env("AUTO_CONFIRM_ON_PAYMENT", "true") === "true",

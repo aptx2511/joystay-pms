@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Check, KeyRound, Loader2, LifeBuoy, LogOut, MapPin, ShieldCheck, Star, Wifi, Clock, Lock } from "lucide-react";
+import { Camera, Check, Copy, CreditCard, KeyRound, Loader2, LifeBuoy, LogOut, MapPin, ShieldCheck, Star, Wifi, Clock, Lock } from "lucide-react";
 
 type Lang = "en" | "vi";
 interface View {
@@ -12,10 +12,20 @@ interface View {
   codesState: "visible" | "need_id" | "too_early" | "preparing" | "expired"; codesOpenAt: string;
   wifi: { name: string; password: string } | null; hotline: string; whatsapp: string; googleReview: string;
   feedbackSent: boolean; issuesCount: number;
+  payment?: { code: string; note: string; total: number; paid: number; due: number; qrUrl: string; bank: { bankId: string; accountNo: string; accountName: string } } | null;
   demo?: { step: string; steps: { key: string; label: string }[] };
 }
 
 const T = {
+  payTitle: { en: "Payment", vi: "Thanh toán" },
+  payBody: { en: "Scan with any Vietnamese banking app (or copy the details). The amount and reference are filled in — we confirm automatically within a minute.", vi: "Quét bằng app ngân hàng bất kỳ (hoặc chép thông tin). Số tiền và nội dung đã điền sẵn — Joystay tự xác nhận trong khoảng 1 phút." },
+  payDue: { en: "Amount due", vi: "Số tiền cần trả" },
+  payPaid: { en: "Received", vi: "Đã nhận" },
+  payBank: { en: "Bank", vi: "Ngân hàng" },
+  payAcc: { en: "Account no.", vi: "Số tài khoản" },
+  payName: { en: "Account name", vi: "Chủ tài khoản" },
+  payNote: { en: "Reference (required)", vi: "Nội dung (bắt buộc)" },
+  payCash: { en: "Prefer cash? You can also pay on arrival.", vi: "Muốn trả tiền mặt? Có thể trả khi đến." },
   welcome: { en: "Welcome", vi: "Chào mừng" },
   checkin: { en: "Check-in from", vi: "Nhận phòng từ" },
   checkout: { en: "Check-out by", vi: "Trả phòng trước" },
@@ -200,6 +210,24 @@ export default function StayPortalPage({ params }: { params: Promise<{ token: st
 
       {error && <p className="text-sm text-red-600 mt-3 px-1">{error}</p>}
 
+      {/* 0. Thanh toán QR (đơn chưa thu đủ, không phải Airbnb) */}
+      {v.payment && v.phase !== "after" && (
+        <Card icon={<CreditCard size={18} />} title={t("payTitle")}>
+          <p className="text-sm text-[#6A7A68]">{t("payBody")}</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={v.payment.qrUrl} alt="VietQR" className="w-56 h-auto mx-auto my-3 rounded-xl border border-[#C8DCC6]" />
+          <div className="text-sm divide-y divide-[#E8F2E8]">
+            <PayRow label={t("payDue")} value={`${v.payment.due.toLocaleString("vi-VN")}đ`} strong />
+            {v.payment.paid > 0 && <PayRow label={t("payPaid")} value={`${v.payment.paid.toLocaleString("vi-VN")}đ / ${v.payment.total.toLocaleString("vi-VN")}đ`} />}
+            <PayRow label={t("payBank")} value={v.payment.bank.bankId} />
+            <PayRow label={t("payAcc")} value={v.payment.bank.accountNo} copy />
+            {v.payment.bank.accountName && <PayRow label={t("payName")} value={v.payment.bank.accountName} />}
+            <PayRow label={t("payNote")} value={v.payment.note} copy strong />
+          </div>
+          <p className="text-xs text-[#6A7A68] mt-3">{t("payCash")}</p>
+        </Card>
+      )}
+
       {/* 1. Giấy tờ */}
       {v.phase !== "after" && (
         <Card icon={<ShieldCheck size={18} />} title={t("regTitle")} done={v.idSubmitted}>
@@ -360,6 +388,22 @@ export default function StayPortalPage({ params }: { params: Promise<{ token: st
 
       <p className="text-center text-xs text-[#6A7A68] py-6">382/23 Nguyễn Thị Minh Khai, Bàn Cờ, District 3 · joystay.vn</p>
     </Shell>
+  );
+}
+
+function PayRow({ label, value, copy, strong }: { label: string; value: string; copy?: boolean; strong?: boolean }) {
+  const [ok, setOk] = useState(false);
+  return (
+    <div className="flex items-center justify-between gap-3 py-2">
+      <span className="text-[#6A7A68]">{label}</span>
+      <span className={`flex items-center gap-2 text-right ${strong ? "font-semibold" : ""}`}>
+        {value}
+        {copy && (
+          <button aria-label="copy" onClick={() => { navigator.clipboard?.writeText(value).catch(() => {}); setOk(true); setTimeout(() => setOk(false), 1500); }}
+            className="text-[#6B9467]">{ok ? <Check size={15} /> : <Copy size={15} />}</button>
+        )}
+      </span>
+    </div>
   );
 }
 

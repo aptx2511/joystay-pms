@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { SESSION_COOKIE, verifySession } from "@/lib/session";
+import { quoteDirect } from "@/lib/rates";
+import { tgNotify } from "@/lib/telegram";
+import { WEB_HOLD_MINUTES, WEB_TAG, ensurePortalLink, newPayCode, paymentView, withPayTag } from "@/lib/payment";
 import { parseISO } from "date-fns";
 import prisma from "@/lib/prisma";
 
@@ -95,6 +100,12 @@ export async function POST(request: Request) {
       guestId = guest.id;
     }
 
+    // Khách tự đặt trên website (không phải PMS đăng nhập, không phải JoyBot) → mã thanh toán JOY + giữ chỗ có hạn
+    const viaUi = await verifySession((await cookies()).get(SESSION_COOKIE)?.value);
+    const isWeb = !viaUi && !String(notes ?? "").startsWith("[JoyBot");
+    let price = totalPrice ? parseFloat(totalPrice) : null;
+    if (isWeb && !price) price = (await quoteDirect(roomId, checkIn.slice(0, 10), checkOut.slice(0, 10)))?.total ?? null;
+    const payCode = isWeb ? await newPayCode() : null;
     const booking = await prisma.booking.create({
       data: {
         roomId,
@@ -105,14 +116,26 @@ export async function POST(request: Request) {
         source:     source ?? "DIRECT",
         // chưa đăng nhập (website khách tự đặt) → luôn chờ duyệt
         status:     request.headers.get("x-pms-auth") === "1" ? status ?? "PENDING" : "PENDING",
-        totalPrice:   totalPrice ? parseFloat(totalPrice) : null,
-        notes:        notes ?? null,
+        totalPrice:   price,
+        notes:        payCode ? withPayTag(`${notes ?? ""} ${WEB_TAG}`, payCode) : notes ?? null,
         cccdFrontUrl: cccdFrontUrl ?? null,
         cccdBackUrl:  cccdBackUrl  ?? null,
-        confirmationCode: confirmationCode ? String(confirmationCode).trim().toUpperCase() : null,
+        confirmationCode: payCode ?? (confirmationCode ? String(confirmationCode).trim().toUpperCase() : null),
       },
       include: { room: true, guest: true },
     });
+
+    if (payCode) {
+      const pay = await paymentView(booking).catch(() => null);
+      const payUrl = await ensurePortalLink(booking.id).catch(() => null);
+      await tgNotify(
+        `🌐 Đơn website mới: ${guestName}${guestPhone ? ` (${guestPhone})` : ""} · phòng ${booking.room.roomNumber ?? booking.room.name} · ` +
+        `${checkIn.slice(0, 10)}→${checkOut.slice(0, 10)} · ${price ? price.toLocaleString("vi-VN") + "đ" : "chưa có giá"}\n` +
+        `Mã thanh toán ${payCode} — tiền về là tự xác nhận; quá ${WEB_HOLD_MINUTES}' chưa có tiền sẽ tự huỷ, nhả lịch.` +
+        (pay ? "" : "\n⚠️ PMS chưa có BANK_ID/BANK_ACCOUNT_NO nên khách chưa thấy QR theo đơn."),
+      ).catch(() => {});
+      return NextResponse.json({ ...booking, payment: pay ? { ...pay, payUrl, holdMinutes: WEB_HOLD_MINUTES } : null }, { status: 201, headers: CORS });
+    }
 
     return NextResponse.json(booking, { status: 201, headers: CORS });
   } catch (error) {

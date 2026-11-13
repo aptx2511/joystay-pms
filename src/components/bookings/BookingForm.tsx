@@ -75,6 +75,29 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
     }
   }, [open, editBooking, initialData]);
 
+  const [payBusy, setPayBusy] = useState(false);
+  const [payMsg, setPayMsg] = useState("");
+  async function makePayLink() {
+    if (!editBooking) return;
+    let amount: string | null = null;
+    const ota = editBooking.source !== "DIRECT" && editBooking.source !== "OFFLINE";
+    if (ota) {
+      amount = window.prompt("Số tiền khách cần trả (đúng giá trên đơn Booking/Agoda, chưa trừ hoa hồng), VNĐ:", "");
+      if (!amount) return;
+    }
+    setPayBusy(true); setPayMsg("");
+    try {
+      const r = await fetch(`/api/bookings/${editBooking.id}/pay-link`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount }),
+      });
+      const d = await r.json();
+      if (!r.ok) { alert(d.error ?? "Lỗi tạo link"); return; }
+      setPayMsg(d.message);
+      if (d.notes) setForm((p) => ({ ...p, notes: d.notes }));
+      navigator.clipboard?.writeText(d.message).catch(() => {});
+    } finally { setPayBusy(false); }
+  }
+
   // Auto-calculate price when room, dates or source change
   // Weekend (Fri/Sat) uses weekendPricePerNight if set; OTA: trừ phí kênh theo CHANNEL_FEE (Airbnb 15,5%)
   useEffect(() => {
@@ -342,6 +365,26 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
               </p>
             )}
           </div>
+
+          {/* Link thanh toán QR (SePay) — đơn đã lưu, không phải Airbnb */}
+          {editBooking && editBooking.source !== "AIRBNB" && editBooking.status !== "BLOCKED" && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+              <button
+                type="button"
+                onClick={makePayLink}
+                disabled={payBusy}
+                className="text-sm font-medium text-emerald-700 hover:text-emerald-800 disabled:opacity-50"
+              >
+                {payBusy ? "Đang tạo…" : "💳 Tạo & copy link thanh toán QR cho khách"}
+              </button>
+              {payMsg && (
+                <>
+                  <p className="text-xs text-emerald-700 mt-1">Đã copy — dán vào chat với khách (Booking/Agoda/Zalo/WhatsApp). Tiền về PMS tự ghi nhận.</p>
+                  <textarea readOnly value={payMsg} rows={4} className="w-full mt-1 text-xs border border-emerald-200 rounded p-2 bg-white" />
+                </>
+              )}
+            </div>
+          )}
 
           {/* Notes */}
           <div>
