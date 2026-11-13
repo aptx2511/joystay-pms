@@ -24,6 +24,13 @@ const EMPTY: BookingFormData = {
   notes:      "",
 };
 
+export const BLOCK_REASONS = [
+  "🔧 Sửa chữa phòng",
+  "🎬 Quay video / chụp ảnh marketing",
+  "🏠 Chủ dùng / người quen ở",
+  "🔒 Lý do khác",
+];
+
 const STATUS_LABEL: Record<BookingStatus, string> = {
   CONFIRMED: "Confirmed",
   PENDING: "Pending",
@@ -271,6 +278,29 @@ export default function BookingForm({ open, onClose, onSaved, initialData, editB
               </select>
             </div>
           </div>
+
+          {/* Lý do khoá — chỉ hiện khi Khoá lịch. Khoá trong PMS (nguồn Trực tiếp) được xuất sang mọi kênh. */}
+          {form.status === "BLOCKED" && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Lý do khoá phòng</label>
+              <div className="flex flex-wrap gap-1.5">
+                {BLOCK_REASONS.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setForm((p) => ({ ...p, guestName: r, source: "DIRECT" }))}
+                    className={`px-2.5 py-1 rounded-full text-xs border ${form.guestName === r ? "bg-amber-500 text-white border-amber-500" : "bg-white text-gray-700 border-gray-300"}`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Khoá ở đây (nguồn Trực tiếp) sẽ tự đóng ngày trên Airbnb, Booking, Agoda ở lần các kênh quét lịch PMS kế tiếp.
+                {form.source !== "DIRECT" && <span className="text-red-600"> Nguồn đang không phải Trực tiếp → khoá này KHÔNG được gửi sang các kênh.</span>}
+              </p>
+            </div>
+          )}
 
           {/* Price */}
           <div>

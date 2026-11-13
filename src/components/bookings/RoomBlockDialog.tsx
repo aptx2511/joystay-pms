@@ -6,7 +6,7 @@ import { Room } from "@/types";
 
 const REASONS = [
   { key: "video", label: "🎬 Quay video / chụp ảnh marketing" },
-  { key: "repair", label: "🔧 Sửa chữa / bảo trì" },
+  { key: "repair", label: "🔧 Sửa chữa phòng" },
   { key: "owner", label: "🏠 Chủ dùng / người quen ở" },
   { key: "other", label: "🔒 Lý do khác" },
 ] as const;

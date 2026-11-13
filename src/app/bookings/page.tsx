@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { format, parseISO } from "date-fns";
-import { Plus, Search, X, ArrowUpDown } from "lucide-react";
+import { Plus, Search, X, ArrowUpDown, Lock } from "lucide-react";
+import RoomBlockDialog from "@/components/bookings/RoomBlockDialog";
 import Header from "@/components/layout/Header";
 import BookingForm from "@/components/bookings/BookingForm";
 import { Booking, SOURCE_META, STATUS_META, BookingSource, BookingStatus } from "@/types";
@@ -137,6 +138,8 @@ export default function BookingsPage() {
     setFormOpen(true);
   }
 
+  const [blockOpen, setBlockOpen] = useState(false);
+
   function openNew() {
     if (needLogin()) return;
     setEditTarget(undefined);
@@ -149,6 +152,15 @@ export default function BookingsPage() {
         title="Bookings"
         subtitle={`${summary.count} / ${bookings.length} booking · ${summary.nights} đêm · ${formatPrice(summary.revenue)} (đã xác nhận)`}
         actions={
+          <div className="flex items-center gap-2">
+          <button
+            onClick={() => { if (!needLogin()) setBlockOpen(true); }}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-gray-800 hover:bg-gray-900 text-white rounded-lg font-medium"
+            title="Khoá phòng (sửa chữa, quay video, chủ dùng…) — đóng lịch trên mọi kênh"
+          >
+            <Lock size={15} />
+            <span className="hidden sm:inline">Khoá phòng</span>
+          </button>
           <button
             onClick={openNew}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium"
@@ -156,6 +168,7 @@ export default function BookingsPage() {
             <Plus size={16} />
             <span className="hidden sm:inline">New Booking</span>
           </button>
+          </div>
         }
       />
 
@@ -358,6 +371,7 @@ export default function BookingsPage() {
         </div>
       </div>
 
+      <RoomBlockDialog open={blockOpen} onClose={() => setBlockOpen(false)} onSaved={() => setRefreshKey((k) => k + 1)} />
       <BookingForm
         open={formOpen}
         onClose={() => setFormOpen(false)}

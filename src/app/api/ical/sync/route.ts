@@ -27,6 +27,16 @@ const PLATFORMS: Record<string, PlatformConfig> = {
   travelokaIcalUrl: { source: "TRAVELOKA", defaultGuestName: "Traveloka Guest",   blockSummaries: [] },
 };
 
+/**
+ * Phòng có 2 listing Airbnb nhưng chỉ 1 listing là lịch chính (11/2026: 302 → Parisian = airbnbIcalUrl2).
+ * Listing phụ (B&W = icalUrl) sắp xoá: chỉ lấy LƯỢT Ở THẬT (vd Minh 12/2026), BỎ mọi khoá lịch của nó
+ * để không làm sai số đêm trống / lấp đầy. Cấu hình: SECONDARY_FEEDS="302:icalUrl,..."
+ */
+const SECONDARY_FEEDS = new Set(
+  (process.env.SECONDARY_FEEDS ?? "302:icalUrl").split(",").map((x) => x.trim()).filter(Boolean)
+);
+const isSecondary = (roomNumber: string | null, feedKey: string) => !!roomNumber && SECONDARY_FEEDS.has(`${roomNumber}:${feedKey}`);
+
 const GENERIC_SUMMARIES = ["reserved", "closed", "not available", "booked", "unavailable"];
 
 const dayKey = (d: Date) => d.toISOString().slice(0, 10);
@@ -88,6 +98,12 @@ async function runSync() {
             select: { checkIn: true, checkOut: true },
           });
           isBlock = sameDates.some((b) => dayKey(b.checkIn) === dayKey(checkIn) && dayKey(b.checkOut) === dayKey(checkOut));
+        }
+
+        // listing phụ: khoá lịch → bỏ qua hoàn toàn (không đánh dấu đã thấy → bản cũ bị huỷ bên dưới)
+        if (isBlock && isSecondary(room.roomNumber, feedKey)) {
+          if (externalId) seenUids.delete(externalId);
+          continue;
         }
 
         const isGeneric = !rawSummary || GENERIC_SUMMARIES.some((s) => lower.includes(s));
@@ -172,6 +188,14 @@ async function runSync() {
         },
         select: { id: true, externalId: true },
       });
+      // listing phụ: huỷ luôn mọi khoá lịch cũ của nó (kể cả đã qua ngày) để số liệu lấp đầy đúng
+      if (isSecondary(room.roomNumber, feedKey)) {
+        const r = await prisma.booking.updateMany({
+          where: { roomId: room.id, status: "BLOCKED", OR: [{ feedKey }, { feedKey: null, source: platform.source }] },
+          data: { status: "CANCELLED", cancelledAt: now },
+        });
+        cancelled += r.count;
+      }
       const gone = stale.filter((b) => b.externalId && !seenUids.has(b.externalId)).map((b) => b.id);
       if (gone.length) {
         await prisma.booking.updateMany({
