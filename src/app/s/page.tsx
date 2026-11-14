@@ -47,7 +47,7 @@ export default function StayLookupPage() {
           className="w-full mt-5 bg-[#1A1E1A] disabled:bg-gray-300 text-white rounded-xl py-3.5 font-semibold flex items-center justify-center gap-2">
           {busy && <Loader2 size={18} className="animate-spin" />} Open · Mở
         </button>
-        <p className="text-xs text-[#6A7A68] mt-4 text-center">Need help? WhatsApp <a className="underline" href="https://wa.me/84854777730">+84 854 777 730</a></p>
+        <p className="text-xs text-[#6A7A68] mt-4 text-center">Need help? WhatsApp <a className="underline" href="https://wa.me/84898888457">+84 898 888 457</a></p>
       </form>
     </div>
   );

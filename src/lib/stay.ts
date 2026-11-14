@@ -14,8 +14,8 @@ export const CHECKOUT_TIME = process.env.STAY_CHECKOUT_TIME || "12:00";
 export const CODES_OPEN_TIME = process.env.STAY_CODES_OPEN_TIME || "10:00"; // giờ VN mã cửa bắt đầu hiện
 export const CODES_OPEN_DAYS_BEFORE = Number(process.env.STAY_CODES_OPEN_DAYS_BEFORE ?? "1"); // hiện trước ngày nhận phòng bao nhiêu ngày
 export const ID_RETENTION_DAYS = Number(process.env.STAY_ID_RETENTION_DAYS || 30);
-export const HOTLINE = process.env.STAY_HOTLINE || "+84 854 777 730";
-export const WHATSAPP = process.env.STAY_WHATSAPP || "https://wa.me/84854777730";
+export const HOTLINE = process.env.STAY_HOTLINE || "+84 898 888 457";
+export const WHATSAPP = process.env.STAY_WHATSAPP || "https://wa.me/84898888457";
 export const GOOGLE_REVIEW = process.env.STAY_GOOGLE_REVIEW_URL || "https://g.page/r/CdJ1fHrqKevREAE/review";
 // Mặc định KHÔNG bắt buộc giấy tờ mới hiện mã (chủ quyết định 05/11). Đặt STAY_REQUIRE_ID=true để bật lại.
 const requireId = () => process.env.STAY_REQUIRE_ID === "true";

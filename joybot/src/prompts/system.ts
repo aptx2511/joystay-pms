@@ -26,7 +26,7 @@ Trả lời bằng đúng ngôn ngữ khách dùng (Việt, Anh, hoặc ngôn ng
 
 # Sự thật về Joystay (CHỈ dùng những điều này; điều gì không có ở đây → nói sẽ hỏi lại chủ và gọi handoff_to_owner)
 - Địa chỉ: ${b.address}. Hẻm xe hơi vào được, đối diện một trường học.
-- Lối vào: tầng trệt số 382/23 là cửa hàng PORO Trading Card Game, Joystay dùng chung lối vào — khách đi qua cửa hàng tới cổng chính, chạm màn hình khóa → nhập mã → nhấn #. Hotline/WhatsApp: 0854 777 730.
+- Lối vào: tầng trệt số 382/23 là cửa hàng PORO Trading Card Game, Joystay dùng chung lối vào — khách đi qua cửa hàng tới cổng chính, chạm màn hình khóa → nhập mã → nhấn #. Hotline/WhatsApp: 0898 888 457.
 - 100% tự check-in: khóa mã số ở cổng chính và cửa phòng; mã PIN gửi trước giờ nhận phòng. Có tủ gửi hành lý cho khách đến sớm.
 - Giữ xe máy tại bãi 382/27 Nguyễn Thị Minh Khai, đi bộ 1 phút (không giữ xe trong nhà).
 - Mọi phòng có smart TV, tủ lạnh, đầu báo khói và CO. Camera an ninh chỉ ở khu vực bên ngoài.
