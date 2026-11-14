@@ -13,6 +13,7 @@ const pms = axios.create({
   },
 });
 const TIME = process.env.VACANCY_REPORT_TIME ?? "08:00";
+const EVENING_TIME = process.env.VACANCY_EVENING_TIME ?? "18:00"; // nhắc đêm trống 48 giờ tới
 
 export async function sendVacancyReport(): Promise<boolean> {
   try {
@@ -25,10 +26,26 @@ export async function sendVacancyReport(): Promise<boolean> {
   }
 }
 
+export async function sendEveningReminder(): Promise<boolean> {
+  try {
+    const { data } = await pms.get<{ text: string }>("/vacancy/digest", { params: { mode: "evening" } });
+    if (data.text) await notifyOwner(data.text);
+    return true;
+  } catch (e) {
+    console.warn("[Vacancy] nhắc tối lỗi:", (e as Error).message);
+    return false;
+  }
+}
+
 /** Gọi mỗi phút từ index.ts */
 export async function vacancyTick() {
   const vn = new Date(Date.now() + 7 * 3_600_000).toISOString();
   const date = vn.slice(0, 10), time = vn.slice(11, 16);
+  if (time === EVENING_TIME) {
+    const ek = `vacancy_evening:${date}`;
+    if (!(await store.getKv(ek).catch(() => null)) && (await sendEveningReminder())) await store.setKv(ek, new Date().toISOString()).catch(() => {});
+    return;
+  }
   if (time !== TIME) return;
   const key = `vacancy_sent:${date}`;
   if (await store.getKv(key).catch(() => null)) return;

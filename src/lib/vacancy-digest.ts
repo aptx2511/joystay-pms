@@ -9,6 +9,16 @@ import { DAY, dayKey, vnToday } from "@/lib/housekeeping";
 const BREAKEVEN_CASH = Number(process.env.OCC_BREAKEVEN_CASH ?? 35); // % lấp đầy đủ chi tiền mặt
 const BREAKEVEN_FULL = Number(process.env.OCC_BREAKEVEN_FULL ?? 53); // % lấp đầy hoàn vốn 5 năm
 const FLOOR_RATIO = Number(process.env.PRICE_FLOOR_RATIO ?? 0.83);
+// Giá khẩn cấp (lấp đầy 7 ngày < mốc đủ chi): giảm theo số ngày còn lại, không dưới EMERGENCY_FLOOR × giá trực tiếp
+const EMERGENCY_FLOOR = Number(process.env.EMERGENCY_FLOOR_RATIO ?? 0.65);
+/** Giá "số lẻ" kiểu 489k, 529k: làm tròn xuống chục nghìn rồi trừ 1k */
+const odd = (n: number) => Math.max(0, Math.floor(n / 10_000) * 10_000 - 1_000);
+/** Mức giảm khẩn cấp theo số ngày tới đêm đó + thứ trong tuần (T6, T7 giảm ít hơn) */
+export function emergencyCut(lead: number, dow: number) {
+  const weekend = dow === 5 || dow === 6;
+  if (lead <= 2) return weekend ? 0.15 : 0.2;
+  return weekend ? 0.1 : 0.15;
+}
 const WD = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const k = (n: number) => `${Math.round(n / 1000).toLocaleString("vi-VN")}k`;
 const dm = (d: Date) => `${WD[d.getUTCDay()]} ${d.getUTCDate()}/${d.getUTCMonth() + 1}`;
@@ -40,6 +50,15 @@ export async function buildVacancyDigest() {
 
   const lines: string[] = [];
   const actions: string[] = [];
+  const emergency: string[] = []; // bảng giá khẩn cấp theo phòng × đêm (7 ngày tới)
+  let cp: { roomId: string; channel: string; date: Date; price: number }[] = [];
+  try { cp = await prisma.channelPrice.findMany({ where: { date: { gte: today, lt: end14 } }, select: { roomId: true, channel: true, date: true, price: true } }); } catch { /* chưa có dữ liệu quét giá */ }
+  /** Giá tham chiếu khách đang thấy: giá Airbnb quét được, không có thì giá trực tiếp (T6–T7 giá cuối tuần) */
+  const refPrice = (r: (typeof rooms)[number], d: Date) => {
+    const ab = cp.find((x) => x.roomId === r.id && x.channel === "AIRBNB" && x.date.getTime() === d.getTime())?.price;
+    const dow = d.getUTCDay();
+    return ab ?? ((dow === 5 || dow === 6) && r.weekendPricePerNight ? r.weekendPricePerNight : r.pricePerNight ?? 0);
+  };
   let tonightFree: string[] = [];
   const weekdayFree3to7: Record<string, string[]> = {};
   const idle: string[] = [];
@@ -56,6 +75,17 @@ export async function buildVacancyDigest() {
     const sold14 = 14 - free.length - Array.from({ length: 14 }, (_, i) => state(r.id, new Date(today.getTime() + i * DAY))).filter((s) => s === "block").length;
     if (!free.length) { lines.push(`✅ ${label}: kín 14 ngày`); continue; }
     lines.push(`🛏 ${label}: trống ${free.length}/14 đêm — ${free.slice(0, 8).map(dm).join(", ")}${free.length > 8 ? "…" : ""}`);
+    // giá khẩn cấp cho đêm trống 7 ngày tới
+    const near = free.filter((d) => d.getTime() < today.getTime() + 7 * DAY);
+    if (near.length) {
+      const cells = near.map((d) => {
+        const lead = Math.round((d.getTime() - today.getTime()) / DAY);
+        const ref = refPrice(r, d);
+        const p = Math.max(odd(ref * (1 - emergencyCut(lead, d.getUTCDay()))), Math.round((direct * EMERGENCY_FLOOR) / 1000) * 1000);
+        return `${dm(d)} ${k(p)} (${k(ref)})`;
+      });
+      emergency.push(`• ${label}: ${cells.join(" · ")}`);
+    }
     if (sold14 === 0) idle.push(label);
 
     // đêm nay
@@ -84,16 +114,22 @@ export async function buildVacancyDigest() {
     }
   }
 
-  if (tonightFree.length) actions.unshift(`🌙 Đêm nay còn trống: ${tonightFree.join(" · ")} → đăng bán trực tiếp (Zalo/FB/khách cũ) ở giá trên, Airbnb đã tự giảm 10% phút chót — KHÔNG giảm thêm.`);
+  const urgent = occ7 < BREAKEVEN_CASH && emergency.length > 0;
+  if (urgent) {
+    actions.unshift(
+      `🚨 KHẨN: 7 ngày tới mới ${occ7}% (< ${BREAKEVEN_CASH}% đủ chi). Chạy KHUYẾN MÃI TUẦN (không sửa giá gốc): Airbnb "Khuyến mãi tuỳ chỉnh", Agoda "Customized", Booking "Ưu đãi phút chót" — ` +
+      `đêm trong 2 ngày giảm 20% (T6–T7 15%), 3–7 ngày giảm 15% (T6–T7 10%). Giá mục tiêu từng đêm (giá đang hiện trong ngoặc):\n${emergency.join("\n")}\n` +
+      `→ Đăng tin bán trực tiếp khách cũ/Zalo/FB cùng giá; Matcha/302 thêm ưu đãi ở ≥3 đêm.`,
+    );
+  } else if (tonightFree.length) actions.unshift(`🌙 Đêm nay còn trống: ${tonightFree.join(" · ")} → đăng bán trực tiếp (Zalo/FB/khách cũ) ở giá trên.`);
   const hot = Object.entries(weekdayFree3to7).filter(([, v]) => v.length >= Math.ceil(rooms.length / 2));
-  if (hot.length) actions.push(`📉 Ngày thường còn ≥ nửa phòng trống: ${hot.map(([d]) => d).join(", ")} → tạo "khuyến mãi tuỳ chỉnh" Airbnb 8% cho đúng các ngày này (vẫn trên sàn).`);
+  if (hot.length && !urgent) actions.push(`📉 Ngày thường còn ≥ nửa phòng trống: ${hot.map(([d]) => d).join(", ")} → tạo "khuyến mãi tuỳ chỉnh" Airbnb ~15% cho đúng các ngày này.`);
   if (idle.length) actions.push(`🔎 ${idle.join(", ")}: 14 ngày chưa có khách → kiểm tra ảnh bìa/tiêu đề, mở thêm kênh, xem giá đối thủ.`);
-  if (occ30 < BREAKEVEN_CASH) actions.push(`⚠️ 30 ngày tới mới ${occ30}% (< ${BREAKEVEN_CASH}% hoà vốn tiền mặt) → đẩy bán: nhắn khách cũ, đăng nội dung, bật giá quốc gia VN trên Booking. Không hạ giá niêm yết.`);
+  if (occ30 < BREAKEVEN_CASH) actions.push(`⚠️ 30 ngày tới mới ${occ30}% (< ${BREAKEVEN_CASH}% hoà vốn tiền mặt) → đẩy bán: nhắn khách cũ, đăng nội dung, bật giá quốc gia VN trên Booking; giảm bằng khuyến mãi có thời hạn, giữ giá gốc.`);
   else if (occ30 >= BREAKEVEN_FULL) actions.push(`🚀 30 ngày tới đạt ${occ30}% (≥ ${BREAKEVEN_FULL}%): có thể tăng giá cuối tuần +5% cho đêm còn trống.`);
 
   // OTA rẻ hơn Airbnb > 10% ở đêm trống 14 ngày tới
   try {
-    const cp = await prisma.channelPrice.findMany({ where: { date: { gte: today, lt: end14 } } });
     const cheap = new Set<string>();
     for (const r of rooms) for (let t = today.getTime(); t < end14.getTime(); t += DAY) {
       const d = new Date(t);
@@ -114,5 +150,37 @@ export async function buildVacancyDigest() {
     actions.length ? "👉 ĐỀ XUẤT HÔM NAY" : "👉 Không cần hành động gì thêm hôm nay.",
     ...actions.map((a, i) => `${i + 1}. ${a}`),
   ].join("\n");
-  return { date: dayKey(today), occ7, occ30, text };
+  return { date: dayKey(today), occ7, occ30, urgent, text };
+}
+
+/** Nhắc 18:00: đêm còn trống trong 48 giờ tới (đêm nay + mai) kèm giá khẩn cấp — rỗng nếu không có */
+export async function buildLastMinuteReminder() {
+  const today = vnToday();
+  const end = new Date(today.getTime() + 2 * DAY);
+  const rooms = await prisma.room.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+  const bookings = await prisma.booking.findMany({
+    where: { status: { in: ["CONFIRMED", "PENDING", "BLOCKED"] }, checkIn: { lt: end }, checkOut: { gt: today } },
+    select: { roomId: true, checkIn: true, checkOut: true },
+  });
+  let cp: { roomId: string; channel: string; date: Date; price: number }[] = [];
+  try { cp = await prisma.channelPrice.findMany({ where: { date: { gte: today, lt: end }, channel: "AIRBNB" }, select: { roomId: true, channel: true, date: true, price: true } }); } catch { /* */ }
+  const rows: string[] = [];
+  for (const r of rooms) {
+    const cells: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const d = new Date(today.getTime() + i * DAY);
+      if (bookings.some((b) => b.roomId === r.id && b.checkIn <= d && d < b.checkOut)) continue;
+      const dow = d.getUTCDay();
+      const ref = cp.find((x) => x.roomId === r.id && x.date.getTime() === d.getTime())?.price
+        ?? ((dow === 5 || dow === 6) && r.weekendPricePerNight ? r.weekendPricePerNight : r.pricePerNight ?? 0);
+      const p = Math.max(odd(ref * (1 - emergencyCut(i, dow))), Math.round(((r.pricePerNight ?? 0) * EMERGENCY_FLOOR) / 1000) * 1000);
+      cells.push(`${i === 0 ? "đêm nay" : "mai"} ${k(p)}`);
+    }
+    if (cells.length) rows.push(`• ${r.roomNumber ?? r.name}: ${cells.join(" · ")}`);
+  }
+  if (!rows.length) return { date: dayKey(today), text: "" };
+  return {
+    date: dayKey(today),
+    text: [`⏰ CÒN TRỐNG 48 GIỜ TỚI (${dm(today)})`, ...rows, "", "→ Đăng bán trực tiếp ngay (Zalo/FB/khách cũ) ở giá trên; kiểm tra khuyến mãi phút chót đang bật trên Airbnb/Agoda/Booking."].join("\n"),
+  };
 }
