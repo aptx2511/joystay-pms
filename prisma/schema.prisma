@@ -269,3 +269,30 @@ model ChannelPrice {
   @@unique([roomId, date, channel])
   @@index([date])
 }
+
+/// Sổ tiền OTA lấy thẳng từ trang của kênh (Airbnb Thu nhập, Agoda Partner Portal, Booking.com Extranet) — nguồn DOANH THU OTA chính xác.
+/// Mỗi dòng = 1 khoản tiền của kênh cho chủ (đặt phòng, điều chỉnh, phí huỷ, bồi thường…). amount = tiền thực nhận (đã trừ hoa hồng), có thể âm.
+model OtaLine {
+  id         String    @id @default(cuid())
+  channel    String    // AIRBNB | BOOKING | AGODA
+  ref        String    @unique // khoá chống trùng do kênh cấp (token giao dịch / mã đặt phòng)
+  code       String?   // mã đặt phòng (HM…, số đặt phòng Booking/Agoda)
+  kind       String    // RESERVATION | ADJUSTMENT | CANCEL_FEE | RESOLUTION | OTHER
+  roomId     String?
+  roomRef    String?   // id listing / loại phòng bên kênh
+  guestName  String?
+  checkIn    DateTime? // ngày nhận phòng (UTC 00:00 ngày VN)
+  checkOut   DateTime?
+  nights     Int?
+  gross      Float?    // khách trả (nếu kênh có)
+  commission Float?    // hoa hồng kênh (nếu kênh có)
+  amount     Float     // chủ thực nhận
+  status     String?   // PAID | UPCOMING | ON_HOLD | CANCELLED…
+  payoutDate DateTime? // ngày (dự kiến) tiền về
+  seenAt     DateTime  @default(now()) // lần nhập gần nhất còn thấy dòng này
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([channel, code])
+  @@index([checkIn])
+}

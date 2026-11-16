@@ -51,3 +51,19 @@ export async function vacancyTick() {
   if (await store.getKv(key).catch(() => null)) return;
   if (await sendVacancyReport()) await store.setKv(key, new Date().toISOString()).catch(() => {});
 }
+
+/** Báo cáo doanh thu tuần (Sổ OTA + trực tiếp) — thứ Hai, mặc định 09:30 giờ VN (sau phiên nhập Sổ OTA buổi sáng) */
+const FINANCE_WEEKLY_TIME = process.env.FINANCE_WEEKLY_TIME ?? "09:30";
+export async function financeWeeklyTick() {
+  const vnNow = new Date(Date.now() + 7 * 3_600_000);
+  if (vnNow.getUTCDay() !== 1 || vnNow.toISOString().slice(11, 16) !== FINANCE_WEEKLY_TIME) return;
+  const key = `finance_weekly:${vnNow.toISOString().slice(0, 10)}`;
+  if (await store.getKv(key).catch(() => null)) return;
+  try {
+    const { data } = await pms.get<{ text: string }>("/finance/weekly");
+    if (data.text) await notifyOwner(data.text);
+    await store.setKv(key, new Date().toISOString()).catch(() => {});
+  } catch (e) {
+    console.warn("[Finance] báo cáo tuần lỗi:", (e as Error).message);
+  }
+}

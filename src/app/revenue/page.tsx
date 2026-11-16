@@ -6,24 +6,28 @@ import Header from "@/components/layout/Header";
 import { formatPrice } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-interface MonthData  { month: string; label: string; revenue: number; bookings: number; nights: number }
-interface RoomData   { roomId: string; name: string; revenue: number; bookings: number; nights: number }
-interface SourceData { source: string; revenue: number; bookings: number }
+interface MonthData  { month: string; label: string; revenue: number; estimated: number; nights: number; occupancy: number }
+interface RoomData   { roomId: string; name: string; revenue: number; estimated: number; nights: number }
+interface SourceData { source: string; revenue: number; estimated: number; nights: number }
 interface Summary    {
-  totalRevenue: number; pendingRevenue: number; totalBookings: number;
-  avgPerBooking: number; totalNights: number; noPriceCount: number;
+  totalRevenue: number; estimated: number; verified: number; totalNights: number; avgPerNight: number;
 }
+interface Unverified { bookingId: string; source: string; guest: string; code: string | null; checkIn: string; checkOut: string; amount: number }
 interface RevenueData {
   summary: Summary;
   byMonth: MonthData[];
   byRoom:  RoomData[];
   bySource: SourceData[];
+  unverified: Unverified[];
+  freshness: Record<string, string>;
 }
 
 const SOURCE_STYLE: Record<string, { label: string; bar: string; badge: string }> = {
   AIRBNB:  { label: "Airbnb",       bar: "bg-rose-500",    badge: "bg-rose-100 text-rose-700"    },
   DIRECT:  { label: "Direct",       bar: "bg-blue-500",    badge: "bg-blue-100 text-blue-700"    },
   OFFLINE: { label: "Offline/Zalo", bar: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-700" },
+  BOOKING: { label: "Booking.com",  bar: "bg-indigo-500",  badge: "bg-indigo-100 text-indigo-700" },
+  AGODA:   { label: "Agoda",        bar: "bg-orange-500",  badge: "bg-orange-100 text-orange-700" },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -110,14 +114,32 @@ export default function RevenuePage() {
           <div className="flex items-center justify-center h-40 text-gray-400">Đang tải dữ liệu…</div>
         ) : !data ? null : (
           <>
-            {/* No-price warning */}
-            {data.summary.noPriceCount > 0 && (
-              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3">
-                <AlertCircle size={16} className="shrink-0" />
-                <span>
-                  <strong>{data.summary.noPriceCount} booking</strong> chưa có giá → vào Settings đặt{" "}
-                  <strong>Giá/đêm</strong> cho từng phòng, sau đó Sync lại để tự tính.
-                </span>
+            {/* Độ tin cậy số liệu */}
+            <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 space-y-1">
+              <p>
+                Doanh thu tính theo <strong>đêm ở</strong> trong tháng. OTA = tiền chủ <strong>thực nhận</strong> lấy từ trang thu nhập của kênh (Sổ OTA, cập nhật thứ Hai hằng tuần).
+              </p>
+              <p className="text-xs text-gray-500">
+                Cập nhật sổ: {["AIRBNB", "BOOKING", "AGODA"].map((c) => {
+                  const t = data.freshness?.[c];
+                  const old = !t || Date.now() - Date.parse(t) > 8 * 86_400_000;
+                  return <span key={c} className={`mr-3 ${old ? "text-amber-600 font-medium" : ""}`}>{SOURCE_STYLE[c]?.label ?? c}: {t ? new Date(t).toLocaleDateString("vi-VN") : "chưa có"}{old ? " ⚠️" : ""}</span>;
+                })}
+              </p>
+            </div>
+            {data.summary.estimated > 0 && (
+              <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3">
+                <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                <div>
+                  <strong>{formatPrice(data.summary.estimated)}</strong> đang là ước tính (đơn chưa có trong Sổ OTA / chưa nhận tiền).
+                  {data.unverified?.length > 0 && (
+                    <ul className="mt-1 text-xs list-disc pl-4">
+                      {data.unverified.slice(0, 10).map((u) => (
+                        <li key={u.bookingId}>{SOURCE_STYLE[u.source]?.label ?? u.source} · {u.checkIn}→{u.checkOut} · {u.guest}{u.code ? ` (${u.code})` : ""} · {formatPrice(u.amount)}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             )}
 
@@ -125,18 +147,16 @@ export default function RevenuePage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <StatCard
                 icon={DollarSign}
-                label="Doanh thu (đã xác nhận)"
+                label="Doanh thu"
                 value={formatPrice(data.summary.totalRevenue)}
-                sub={data.summary.pendingRevenue > 0
-                  ? `+ ${formatPrice(data.summary.pendingRevenue)} chờ xác nhận`
-                  : undefined}
+                sub={data.summary.estimated > 0 ? `${formatPrice(data.summary.verified)} đã đối soát` : "100% đã đối soát"}
                 color="bg-emerald-500"
               />
               <StatCard
                 icon={Calendar}
-                label="Số booking"
-                value={String(data.summary.totalBookings)}
-                sub={`Avg ${formatPrice(data.summary.avgPerBooking)} / booking`}
+                label="Thực nhận / đêm"
+                value={formatPrice(data.summary.avgPerNight)}
+                sub="Bình quân mọi kênh"
                 color="bg-blue-500"
               />
               <StatCard
@@ -172,7 +192,7 @@ export default function RevenuePage() {
                       <span className="text-xs sm:text-sm font-semibold text-gray-800 tabular-nums">
                         {m.revenue > 0 ? formatPrice(m.revenue) : <span className="text-gray-300">—</span>}
                       </span>
-                      <span className="block sm:inline text-[11px] sm:text-xs text-gray-400 sm:ml-2">({m.bookings} booking)</span>
+                      <span className="block sm:inline text-[11px] sm:text-xs text-gray-400 sm:ml-2">({m.nights} đêm · {m.occupancy}%{m.estimated > 0 ? " · có ước tính" : ""})</span>
                     </div>
                   </div>
                 ))}
@@ -209,10 +229,11 @@ export default function RevenuePage() {
                           />
                         </div>
                         <p className="text-xs text-gray-400 mt-1">
-                          {r.bookings} booking · {r.nights} đêm
-                          {r.bookings > 0 && r.revenue > 0 && (
-                            <> · avg {formatPrice(Math.round(r.revenue / r.bookings))}</>
+                          {r.nights} đêm
+                          {r.nights > 0 && r.revenue > 0 && (
+                            <> · {formatPrice(Math.round(r.revenue / r.nights))}/đêm</>
                           )}
+                          {r.estimated > 0 && <> · ước tính {formatPrice(r.estimated)}</>}
                         </p>
                       </div>
                     ))}
@@ -252,7 +273,7 @@ export default function RevenuePage() {
                               style={{ width: `${share}%` }}
                             />
                           </div>
-                          <p className="text-xs text-gray-400 mt-1">{s.bookings} booking</p>
+                          <p className="text-xs text-gray-400 mt-1">{s.nights} đêm{s.estimated > 0 ? ` · ước tính ${formatPrice(s.estimated)}` : ""}</p>
                         </div>
                       );
                     })}

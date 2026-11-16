@@ -6,6 +6,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { DAY, dayKey, vnToday } from "@/lib/housekeeping";
+import { LEDGER_CHANNELS, LedgerChannel, revenueSplit } from "@/lib/ota-ledger";
 
 export const OUT_CATEGORIES = ["Tiền nhà", "Điện", "Nước", "Internet", "Lương / dọn phòng", "Giặt là", "Vật tư / amenity", "Sửa chữa", "Phí kênh / OTA", "Marketing", "Khác"];
 export const IN_CATEGORIES = ["Tiền phòng", "Phí trả sớm / phụ thu", "Khác"];
@@ -48,20 +49,17 @@ export async function monthReport(month: string) {
   const fixed = (await prisma.fixedCost.findMany()).filter((f) => f.startMonth <= month && (!f.endMonth || f.endMonth >= month));
 
   const per = new Map(rooms.map((r) => [r.id, { roomId: r.id, label: label(r), nights: 0, revenue: 0, estimated: 0, direct: 0, shared: 0, profit: 0, occupancy: 0 }]));
-  for (const b of bookings) {
-    const row = per.get(b.roomId); if (!row) continue;
-    const total = Math.max(1, Math.round((b.checkOut.getTime() - b.checkIn.getTime()) / DAY));
-    const from = Math.max(b.checkIn.getTime(), start.getTime()), to = Math.min(b.checkOut.getTime(), end.getTime());
-    const n = Math.max(0, Math.round((to - from) / DAY));
-    const received = paidOf.get(b.id) ?? 0;
-    const money = received > 0 ? received : b.totalPrice ?? 0;
-    const part = (money * n) / total;
-    row.nights += n; row.revenue += part; if (!(received > 0)) row.estimated += part;
+  // Doanh thu phòng theo đêm ở: OTA lấy từ Sổ OTA (tiền thật của kênh), đơn khác từ tiền đã thu / giá PMS
+  const split = await revenueSplit(start, end, paidOf);
+  for (const [roomId, r] of split.rooms) {
+    const row = per.get(roomId); if (!row) continue;
+    row.nights += r.nights; row.revenue += r.verified + r.estimated; row.estimated += r.estimated;
   }
   let sharedOut = 0, sharedIn = 0;
   for (const t of txns) {
     const sign = t.kind === "IN" ? 1 : -1;
     if (t.kind === "IN" && t.bookingId) continue; // đã tính theo đêm ở trên
+    if (t.kind === "IN" && t.channel && LEDGER_CHANNELS.includes(t.channel as LedgerChannel) && t.source === "CSV") continue; // CSV kênh cũ — Sổ OTA đã tính
     const row = t.roomId ? per.get(t.roomId) : undefined;
     if (row) { if (sign > 0) row.revenue += t.amount; else row.direct += t.amount; }
     else if (sign > 0) sharedIn += t.amount; else sharedOut += t.amount;
@@ -77,6 +75,9 @@ export async function monthReport(month: string) {
 
   // Đối soát: booking nhận phòng trong tháng
   const today = dayKey(vnToday());
+  const ledger = await prisma.otaLine.groupBy({ by: ["code"], where: { code: { in: bookings.map((b) => b.confirmationCode).filter(Boolean) as string[] } }, _sum: { amount: true } });
+  const ledgerOf = new Map(ledger.map((l) => [l.code!, l._sum.amount ?? 0]));
+  for (const b of bookings) if (b.confirmationCode && ledgerOf.has(b.confirmationCode) && !paidOf.has(b.id)) paidOf.set(b.id, ledgerOf.get(b.confirmationCode)!);
   const recon = bookings
     .filter((b) => b.checkIn >= start && b.checkIn < end)
     .sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime())
@@ -94,7 +95,7 @@ export async function monthReport(month: string) {
     month, daysInMonth, rooms: list, totals: { ...totals, occupancy: rooms.length ? Math.round((totals.nights / (daysInMonth * rooms.length)) * 100) : 0 },
     cash: { in: Math.round(cashIn), out: Math.round(cashOut) }, sharedCost: Math.round(sharedOut),
     txns: txns.map((t) => ({ id: t.id, kind: t.kind, date: dayKey(t.date), amount: t.amount, category: t.category, roomId: t.roomId, bookingId: t.bookingId, channel: t.channel, note: t.note, source: t.source })),
-    fixed, recon,
+    fixed, recon, channels: split.channels, unverified: split.unverified,
     roomsList: rooms.map((r) => ({ id: r.id, no: r.roomNumber!, label: label(r) })),
     months: monthOf(start),
   };
