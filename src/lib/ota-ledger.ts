@@ -10,6 +10,7 @@
  *  - Trực tiếp / khác: như cũ (tiền SePay / tiền đã ghi, chưa có thì giá PMS).
  */
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { DAY, dayKey, vnToday } from "@/lib/housekeeping";
 
 export const LEDGER_CHANNELS = ["AIRBNB", "BOOKING", "AGODA"] as const;
@@ -70,6 +71,12 @@ export async function importOtaLines(channel: LedgerChannel, rows: OtaRow[], sna
       .map((b) => [b.confirmationCode!, b.roomId]),
   );
 
+  // Ghép phòng theo ngày cho kênh không có id listing trong link iCal (1 truy vấn cho cả lô)
+  const datesNeeded = rows.filter((r) => channel !== "AIRBNB" && r.roomRef && r.checkIn && r.checkOut);
+  const sameDates = datesNeeded.length
+    ? await prisma.booking.findMany({ where: { source: channel, status: { not: "BLOCKED" }, OR: datesNeeded.map((r) => ({ checkIn: d0(r.checkIn)!, checkOut: d0(r.checkOut)! })) }, select: { roomId: true, checkIn: true, checkOut: true } })
+    : [];
+  const prepared: { ref: string; data: Record<string, unknown> }[] = [];
   for (const r of rows) {
     const amount = Math.round(Number(r.amount));
     if (!Number.isFinite(amount)) continue;
@@ -78,34 +85,39 @@ export async function importOtaLines(channel: LedgerChannel, rows: OtaRow[], sna
     base = `${channel}|${base}`;
     const n = (seenRef.get(base) ?? 0) + 1; seenRef.set(base, n);
     const ref = n > 1 ? `${base}#${n}` : base;
+    const checkIn = d0(r.checkIn), checkOut = d0(r.checkOut);
 
-    let roomId = R.room(channel, r);
-    if (!roomId && r.code && pmsByCode.has(r.code)) roomId = pmsByCode.get(r.code)!;
-    if (!roomId && r.roomRef && channel !== "AIRBNB" && r.checkIn && r.checkOut) {
-      const b = await prisma.booking.findMany({ where: { source: channel, checkIn: d0(r.checkIn)!, checkOut: d0(r.checkOut)!, status: { not: "BLOCKED" } }, select: { roomId: true } });
-      const ids = [...new Set(b.map((x) => x.roomId))];
+    let roomId = R.room(channel, r) ?? (r.code ? pmsByCode.get(r.code) ?? null : null);
+    if (!roomId && checkIn && checkOut && channel !== "AIRBNB") {
+      const ids = [...new Set(sameDates.filter((x) => +x.checkIn === +checkIn && +x.checkOut === +checkOut).map((x) => x.roomId))];
       if (ids.length === 1) roomId = ids[0];
     }
     if (roomId && r.roomRef && channel !== "AIRBNB" && !R.map[`${channel}:${r.roomRef}`]) learned[`${channel}:${r.roomRef}`] = roomId;
     if (!roomId) noRoom++;
-
-    const checkIn = d0(r.checkIn), checkOut = d0(r.checkOut);
     const nights = r.nights ?? (checkIn && checkOut ? Math.round((checkOut.getTime() - checkIn.getTime()) / DAY) : null);
-    const data = {
+    prepared.push({ ref, data: {
       channel, code: r.code ?? null, kind, roomId, roomRef: r.roomRef ?? null, guestName: r.guest?.slice(0, 80) ?? null,
       checkIn, checkOut, nights, gross: r.gross ?? null, commission: r.commission ?? null, amount,
       status: r.status ?? null, payoutDate: d0(r.payoutDate), seenAt: startedAt,
-    };
-    await prisma.otaLine.upsert({ where: { ref }, create: { ref, ...data }, update: data });
-    upserted++;
+    } });
   }
+  if (snapshot) {
+    // ảnh chụp toàn bộ sổ của kênh → thay hẳn (2 truy vấn, nhanh)
+    await prisma.$transaction([
+      prisma.otaLine.deleteMany({ where: { channel } }),
+      prisma.otaLine.createMany({ data: prepared.map((p) => ({ ref: p.ref, ...p.data })) as never }),
+    ]);
+  } else {
+    for (let i = 0; i < prepared.length; i += 10)
+      await Promise.all(prepared.slice(i, i + 10).map((p) => prisma.otaLine.upsert({ where: { ref: p.ref }, create: { ref: p.ref, ...p.data } as never, update: p.data as never })));
+  }
+  upserted = prepared.length;
 
   if (Object.keys(learned).length) {
     const value = JSON.stringify({ ...R.map, ...learned });
     await prisma.appSetting.upsert({ where: { key: MAP_KEY }, create: { key: MAP_KEY, value }, update: { value } });
   }
-  let removed = 0;
-  if (snapshot && rows.length) removed = (await prisma.otaLine.deleteMany({ where: { channel, seenAt: { lt: startedAt } } })).count;
+  const removed = 0;
   const sync = await syncBookings(channel, snapshot);
   await prisma.appSetting.upsert({
     where: { key: `ota_import_at:${channel}` },
@@ -124,31 +136,34 @@ async function syncBookings(channel: LedgerChannel, snapshot: boolean) {
   let updated = 0, created = 0, ghosts = 0;
   const missingInPms: string[] = [];
 
+  const pms = await prisma.booking.findMany({ where: { confirmationCode: { in: [...byCode.keys()] } }, orderBy: [{ updatedAt: "desc" }] });
+  const pmsBy = new Map<string, (typeof pms)[number]>();
+  for (const b of pms) { const cur = pmsBy.get(b.confirmationCode!); if (!cur || (cur.status === "CANCELLED" && b.status !== "CANCELLED")) pmsBy.set(b.confirmationCode!, b); }
+  const noCode = await prisma.booking.findMany({ where: { source: channel, confirmationCode: null, status: { not: "CANCELLED" } } });
+  const updates: Promise<unknown>[] = [];
+  const creates: Prisma.BookingCreateManyInput[] = [];
   for (const [code, ls] of byCode) {
     const total = Math.round(ls.reduce((s, l) => s + l.amount, 0));
     const res = ls.find((l) => l.kind === "RESERVATION" && l.checkIn && l.checkOut) ?? ls.find((l) => l.checkIn && l.checkOut);
-    let b = await prisma.booking.findFirst({ where: { confirmationCode: code }, orderBy: [{ status: "asc" }, { updatedAt: "desc" }] });
-    if (!b && res?.roomId) {
-      b = await prisma.booking.findFirst({ where: { source: channel, roomId: res.roomId, checkIn: res.checkIn!, checkOut: res.checkOut!, confirmationCode: null, status: { not: "CANCELLED" } } });
-    }
+    let b = pmsBy.get(code);
+    let viaDates = false;
+    if (!b && res?.roomId) { b = noCode.find((x) => x.roomId === res.roomId && +x.checkIn === +res.checkIn! && +x.checkOut === +res.checkOut!); viaDates = !!b; }
     if (b) {
       const data: Record<string, unknown> = {};
       if (b.totalPrice !== total || b.priceSource !== "IMPORT") { data.totalPrice = total; data.priceSource = "IMPORT"; }
       if (!b.confirmationCode) data.confirmationCode = code;
-      if (b.status === "BLOCKED" && res) data.status = "CONFIRMED";
+      if ((b.status === "BLOCKED" || viaDates) && res) data.status = "CONFIRMED";
       if (res?.guestName && (!b.guestName || GENERIC_NAME.test(b.guestName))) data.guestName = res.guestName;
-      if (Object.keys(data).length) { await prisma.booking.update({ where: { id: b.id }, data }); updated++; }
+      if (Object.keys(data).length) { updates.push(prisma.booking.update({ where: { id: b.id }, data })); updated++; }
     } else if (res?.roomId && res.checkOut! <= today && total > 0) {
-      await prisma.booking.create({ data: {
-        roomId: res.roomId, guestName: res.guestName ?? `${channel[0]}${channel.slice(1).toLowerCase()} guest`, checkIn: res.checkIn!, checkOut: res.checkOut!,
+      creates.push({
+        roomId: res.roomId, guestName: res.guestName ?? `${channel} guest`, checkIn: res.checkIn!, checkOut: res.checkOut!,
         source: channel, status: "CONFIRMED", totalPrice: total, priceSource: "IMPORT", confirmationCode: code,
         notes: "[Sổ OTA] Tạo từ dữ liệu thu nhập của kênh",
-      } });
-      created++;
+      });
     } else if (res && res.checkOut! > today) missingInPms.push(code);
   }
-
-  // Đơn Airbnb ảo: khoá lịch "Not available" cũ bị nhập nhầm thành đặt phòng (không mã HM) và đã qua
+  // Đơn Airbnb ảo phải chuyển trước khi khôi phục/tạo lượt ở thật
   if (channel === "AIRBNB" && snapshot) {
     const r = await prisma.booking.updateMany({
       where: { source: "AIRBNB", status: "CONFIRMED", confirmationCode: null, checkOut: { lte: today } },
@@ -156,6 +171,9 @@ async function syncBookings(channel: LedgerChannel, snapshot: boolean) {
     });
     ghosts = r.count;
   }
+  for (let i = 0; i < updates.length; i += 10) await Promise.all(updates.slice(i, i + 10));
+  if (creates.length) created = (await prisma.booking.createMany({ data: creates })).count;
+
   // Đơn PMS còn hiệu lực của kênh nhưng kênh không có (đơn ma / huỷ chưa cập nhật)
   const pmsOnly = snapshot
     ? (await prisma.booking.findMany({
