@@ -109,11 +109,11 @@ export default function SoOtaPage() {
   useEffect(() => {
     const onMsg = async (e: MessageEvent) => {
       if (!ORIGINS.some((r) => r.test(e.origin))) return;
-      const d = e.data as { type?: string; channel?: string; rows?: unknown[]; snapshot?: boolean };
-      if (d?.type !== "joy-ota" || !Array.isArray(d.rows)) return;
+      const d = e.data as { type?: string; channel?: string; rows?: unknown[]; bookings?: unknown[]; snapshot?: boolean };
+      if (d?.type !== "joy-ota" || (!Array.isArray(d.rows) && !Array.isArray(d.bookings))) return;
       const at = new Date().toLocaleTimeString("vi-VN");
       try {
-        const r = await fetch("/api/finance/import-ota", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ channel: d.channel, rows: d.rows, snapshot: !!d.snapshot, notify: true }) });
+        const r = await fetch("/api/finance/import-ota", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ channel: d.channel, rows: d.rows, bookings: d.bookings, snapshot: !!d.snapshot, notify: true }) });
         const j = await r.json();
         (window as unknown as { __joyLast: unknown }).__joyLast = j;
         e.source?.postMessage({ type: "joy-ota-result", result: j }, { targetOrigin: e.origin });
