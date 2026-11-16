@@ -19,7 +19,8 @@ type Row = {
   room: string | null; status: string; gross: number | null; commission: number | null; net: number | null; received: number; upcoming: number; source: string;
 };
 const CH: Record<string, string> = { AIRBNB: "Airbnb", BOOKING: "Booking.com", AGODA: "Agoda", DIRECT: "Trực tiếp", OFFLINE: "Khác", TRAVELOKA: "Traveloka" };
-const ST: Record<string, string> = { upcoming: "sắp tới", completed: "đã ở", current: "đang ở", canceled: "đã huỷ", cancelled: "đã huỷ", AGODA_COLLECT: "Agoda thu hộ", HOTEL_COLLECT: "thu tại chỗ" };
+const ST: Record<string, string> = { upcoming: "sắp tới", completed: "đã ở", complete: "đã ở", current: "đang ở", canceled: "đã huỷ", cancelled: "đã huỷ",
+  canceled_by_guest: "khách huỷ", canceled_by_host: "chủ huỷ", CONFIRMED: "đã xác nhận", CANCELLED: "đã huỷ", AGODA_COLLECT: "Agoda thu hộ", HOTEL_COLLECT: "thu tại chỗ" };
 const vnd = (n: number | null | undefined) => (n == null ? "" : Math.round(n).toLocaleString("vi-VN"));
 const ym = (d = new Date()) => d.toISOString().slice(0, 7);
 
