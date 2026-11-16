@@ -245,6 +245,90 @@ export async function revenueSplit(start: Date, end: Date, paidOf?: Map<string, 
   return out;
 }
 
+export type OtaBookingRow = {
+  code: string; guest?: string | null; guests?: number | null; bookedAt?: string | null; checkIn: string; checkOut: string;
+  nights?: number | null; roomId?: string | null; roomRef?: string | null; status?: string | null;
+  gross?: number | null; commission?: number | null; net?: number | null;
+};
+
+/** Danh sách đặt phòng của 1 kênh (ảnh chụp toàn bộ → thay hẳn) */
+export async function importOtaBookings(channel: LedgerChannel, list: OtaBookingRow[]) {
+  const R = await resolver();
+  const pms = new Map((await prisma.booking.findMany({ where: { confirmationCode: { in: list.map((b) => b.code) } }, select: { confirmationCode: true, roomId: true } })).map((b) => [b.confirmationCode!, b.roomId]));
+  const now = new Date();
+  const data = list.filter((b) => b.code && d0(b.checkIn) && d0(b.checkOut)).map((b) => {
+    const checkIn = d0(b.checkIn)!, checkOut = d0(b.checkOut)!;
+    return {
+      channel, code: String(b.code), guestName: b.guest?.slice(0, 120) ?? null, guests: b.guests ?? null, bookedAt: d0(b.bookedAt),
+      checkIn, checkOut, nights: b.nights ?? Math.round((checkOut.getTime() - checkIn.getTime()) / DAY),
+      roomId: R.room(channel, { amount: 0, roomId: b.roomId, roomRef: b.roomRef }) ?? pms.get(String(b.code)) ?? null, roomRef: b.roomRef ?? null,
+      status: b.status ?? null, gross: b.gross ?? null, commission: b.commission ?? null, net: b.net ?? null, seenAt: now,
+    };
+  });
+  if (!data.length) return { bookings: 0 };
+  // dedupe theo mã
+  const uniq = [...new Map(data.map((d) => [d.code, d])).values()];
+  await prisma.$transaction([prisma.otaBooking.deleteMany({ where: { channel } }), prisma.otaBooking.createMany({ data: uniq })]);
+  // tên khách đầy đủ + mã cho đơn PMS
+  const named = uniq.filter((d) => d.guestName);
+  const pmsList = await prisma.booking.findMany({ where: { confirmationCode: { in: named.map((d) => d.code) } }, select: { id: true, confirmationCode: true, guestName: true } });
+  const byCode = new Map(named.map((d) => [d.code, d.guestName!]));
+  const ups = pmsList.filter((b) => b.guestName !== byCode.get(b.confirmationCode!) && (GENERIC_NAME.test(b.guestName) || byCode.get(b.confirmationCode!)!.startsWith(b.guestName.split(" ")[0])))
+    .map((b) => prisma.booking.update({ where: { id: b.id }, data: { guestName: byCode.get(b.confirmationCode!)! } }));
+  for (let i = 0; i < ups.length; i += 10) await Promise.all(ups.slice(i, i + 10));
+  return { bookings: uniq.length, renamed: ups.length };
+}
+
+export type BookingSummaryRow = {
+  channel: string; code: string | null; guest: string; guests: number | null; bookedAt: string | null; checkIn: string; checkOut: string; nights: number;
+  room: string | null; status: string; gross: number | null; commission: number | null; net: number | null; received: number; upcoming: number; source: "KÊNH" | "PMS";
+};
+
+/** Tổng hợp theo TỪNG ĐẶT PHÒNG mọi kênh: kênh (danh sách đặt phòng + Sổ OTA) + đơn trực tiếp/khác trong PMS */
+export async function bookingSummary(from: Date, to: Date, by: "checkIn" | "bookedAt" = "checkIn"): Promise<BookingSummaryRow[]> {
+  const rooms = new Map((await prisma.room.findMany({ select: { id: true, roomNumber: true, name: true } })).map((r) => [r.id, r.roomNumber ?? r.name]));
+  const ota = await prisma.otaBooking.findMany({ where: by === "bookedAt" ? { bookedAt: { gte: from, lt: to } } : { checkIn: { gte: from, lt: to } } });
+  const lines = await prisma.otaLine.findMany({ where: { code: { in: ota.map((o) => o.code) } }, select: { code: true, amount: true, status: true } });
+  const money = new Map<string, { received: number; upcoming: number }>();
+  for (const l of lines) {
+    const m = money.get(l.code!) ?? { received: 0, upcoming: 0 };
+    if (l.status === "PAID") m.received += l.amount; else m.upcoming += l.amount;
+    money.set(l.code!, m);
+  }
+  const rows: BookingSummaryRow[] = ota.map((o) => {
+    const m = money.get(o.code) ?? { received: 0, upcoming: 0 };
+    // Agoda/Booking: chưa có dòng tiền riêng → coi net theo kênh là "sắp về"
+    const upcoming = m.received || m.upcoming ? m.upcoming : (o.net ?? 0);
+    return {
+      channel: o.channel, code: o.code, guest: o.guestName ?? "", guests: o.guests, bookedAt: o.bookedAt ? dayKey(o.bookedAt) : null,
+      checkIn: dayKey(o.checkIn), checkOut: dayKey(o.checkOut), nights: o.nights ?? 0, room: o.roomId ? rooms.get(o.roomId) ?? null : null,
+      status: o.status ?? "", gross: o.gross, commission: o.commission, net: o.net ?? (m.received + m.upcoming || null),
+      received: Math.round(m.received), upcoming: Math.round(upcoming), source: "KÊNH",
+    };
+  });
+  const otaChannels = new Set((await prisma.otaBooking.groupBy({ by: ["channel"] })).map((x) => x.channel));
+  const pms = await prisma.booking.findMany({
+    where: {
+      status: { in: ["CONFIRMED", "PENDING"] },
+      ...(by === "bookedAt" ? { createdAt: { gte: from, lt: to } } : { checkIn: { gte: from, lt: to } }),
+    },
+  });
+  const known = new Set(ota.map((o) => o.code));
+  const paid = await prisma.txn.groupBy({ by: ["bookingId"], where: { kind: "IN", bookingId: { in: pms.map((b) => b.id) } }, _sum: { amount: true } });
+  const paidOf = new Map(paid.map((p) => [p.bookingId!, p._sum.amount ?? 0]));
+  for (const b of pms) {
+    if (otaChannels.has(b.source) && (!b.confirmationCode || known.has(b.confirmationCode))) continue; // kênh đã có danh sách thật
+    const received = paidOf.get(b.id) ?? 0;
+    rows.push({
+      channel: b.source, code: b.confirmationCode, guest: b.guestName, guests: null, bookedAt: dayKey(b.createdAt),
+      checkIn: dayKey(b.checkIn), checkOut: dayKey(b.checkOut), nights: Math.round((b.checkOut.getTime() - b.checkIn.getTime()) / DAY),
+      room: rooms.get(b.roomId) ?? null, status: b.status === "PENDING" ? "chờ xác nhận" : "đã xác nhận",
+      gross: b.totalPrice, commission: null, net: b.totalPrice, received: Math.round(received), upcoming: Math.max(0, Math.round((b.totalPrice ?? 0) - received)), source: "PMS",
+    });
+  }
+  return rows.sort((a, b) => (by === "bookedAt" ? (a.bookedAt ?? "").localeCompare(b.bookedAt ?? "") : a.checkIn.localeCompare(b.checkIn)));
+}
+
 /** Ngày nhập sổ gần nhất của từng kênh */
 export async function ledgerFreshness() {
   const s = await prisma.appSetting.findMany({ where: { key: { startsWith: "ota_import_at:" } } });

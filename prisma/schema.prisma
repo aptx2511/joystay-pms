@@ -296,3 +296,29 @@ model OtaLine {
   @@index([channel, code])
   @@index([checkIn])
 }
+
+/// Danh sách đặt phòng lấy thẳng từ kênh (người đặt, ngày đặt, mã, ngày ở, giá) — đi kèm Sổ OTA để tổng hợp theo từng đặt phòng
+model OtaBooking {
+  id         String    @id @default(cuid())
+  channel    String    // AIRBNB | BOOKING | AGODA
+  code       String    // mã đặt phòng của kênh
+  guestName  String?
+  guests     Int?
+  bookedAt   DateTime? // ngày khách đặt
+  checkIn    DateTime
+  checkOut   DateTime
+  nights     Int?
+  roomId     String?
+  roomRef    String?
+  status     String?   // trạng thái theo kênh (upcoming / completed / canceled / confirmed …)
+  gross      Float?    // khách trả
+  commission Float?    // hoa hồng kênh
+  net        Float?    // chủ thực nhận theo trang đặt phòng của kênh
+  seenAt     DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([channel, code])
+  @@index([checkIn])
+  @@index([bookedAt])
+}

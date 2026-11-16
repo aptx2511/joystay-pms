@@ -117,7 +117,7 @@ export default function RevenuePage() {
             {/* Độ tin cậy số liệu */}
             <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 space-y-1">
               <p>
-                Doanh thu tính theo <strong>đêm ở</strong> trong tháng. OTA = tiền chủ <strong>thực nhận</strong> lấy từ trang thu nhập của kênh (Sổ OTA, cập nhật thứ Hai hằng tuần).
+                Doanh thu tính theo <strong>đêm ở</strong> trong tháng. OTA = tiền chủ <strong>thực nhận</strong> lấy từ trang thu nhập của kênh (Sổ OTA, cập nhật thứ Hai hằng tuần). <a href="/so-ota" className="text-blue-600 underline">Xem từng đặt phòng (khách, ngày đặt, mã) →</a>
               </p>
               <p className="text-xs text-gray-500">
                 Cập nhật sổ: {["AIRBNB", "BOOKING", "AGODA"].map((c) => {

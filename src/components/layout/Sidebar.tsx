@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   { href: "/",           label: "Dashboard",   icon: LayoutDashboard },
   { href: "/bookings",   label: "Bookings",    icon: CalendarDays    },
   { href: "/revenue",    label: "Doanh thu",   icon: TrendingUp      },
+  { href: "/so-ota",     label: "Sổ đặt phòng", icon: CalendarDays  },
   { href: "/thu-chi",    label: "Thu chi",     icon: Wallet          },
   { href: "/gia-phong-trong", label: "Giá & trống", icon: Tag      },
   { href: "/gia-kenh",   label: "Giá các kênh", icon: BarChart3      },
