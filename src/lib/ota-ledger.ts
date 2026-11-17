@@ -164,9 +164,10 @@ async function syncBookings(channel: LedgerChannel, snapshot: boolean) {
     } else if (res && res.checkOut! > today) missingInPms.push(code);
   }
   // Đơn Airbnb ảo phải chuyển trước khi khôi phục/tạo lượt ở thật
-  if (channel === "AIRBNB" && snapshot) {
+  // (mọi kênh: lượt ở đã qua mà không có mã = khoá lịch iCal / bản ghi trùng → sổ của kênh đã có lượt thật)
+  if (snapshot) {
     const r = await prisma.booking.updateMany({
-      where: { source: "AIRBNB", status: "CONFIRMED", confirmationCode: null, checkOut: { lte: today } },
+      where: { source: channel, status: "CONFIRMED", confirmationCode: null, checkOut: { lte: today } },
       data: { status: "BLOCKED" },
     });
     ghosts = r.count;
