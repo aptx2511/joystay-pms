@@ -30,10 +30,17 @@ export async function POST(request: Request) {
   });
   const match = candidates.find((b) => {
     const phones = [b.portal?.phoneLast4, b.guest?.phone?.replace(/\D/g, "").slice(-4)].filter(Boolean);
-    return phones.includes(l);
+    if (phones.includes(l)) return true;
+    // Khách Agoda/Booking.com: kênh không cho số điện thoại → ô thứ 2 nhập NGÀY NHẬN PHÒNG dạng DDMM (vd 2111)
+    if (b.source === "AGODA" || b.source === "BOOKING") {
+      const ddmm = b.checkIn.toISOString().slice(8, 10) + b.checkIn.toISOString().slice(5, 7);
+      return l === ddmm;
+    }
+    return false;
   });
   if (!match) return fail("Không tìm thấy đặt phòng — kiểm tra lại hoặc nhắn Joystay / Booking not found — please check or message us");
 
-  const portal = match.portal ?? (await prisma.stayPortal.create({ data: { bookingId: match.id, token: newToken(), phoneLast4: l } }));
+  const viaPhone = !(match.source === "AGODA" || match.source === "BOOKING") || [match.portal?.phoneLast4, match.guest?.phone?.replace(/\D/g, "").slice(-4)].includes(l);
+  const portal = match.portal ?? (await prisma.stayPortal.create({ data: { bookingId: match.id, token: newToken(), phoneLast4: viaPhone ? l : null } }));
   return NextResponse.json({ token: portal.token });
 }

@@ -34,10 +34,11 @@ export default function StayLookupPage() {
         <p className="text-sm text-[#6A7A68] mt-1">Registration, door codes &amp; help — all in one place.<br />Đăng ký lưu trú, mã cửa và hỗ trợ.</p>
 
         <label className="block text-xs font-medium text-[#6A7A68] mt-5 mb-1 uppercase tracking-wide">Booking code · Mã đặt phòng</label>
-        <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="HMXXXXXXXX"
+        <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="HM… / Agoda / Booking.com ID"
           className="w-full border border-[#C8DCC6] rounded-xl px-3 py-3 text-lg tracking-wider focus:outline-none focus:ring-2 focus:ring-[#6B9467]" autoCapitalize="characters" />
 
         <label className="block text-xs font-medium text-[#6A7A68] mt-4 mb-1 uppercase tracking-wide">Last 4 digits of your phone · 4 số cuối điện thoại</label>
+        <p className="text-[11px] text-[#6A7A68] -mt-0.5 mb-1">Agoda / Booking.com: enter your check-in date as DDMM (e.g. 21 Nov → 2111) · nhập ngày nhận phòng dạng NNTT</p>
         <input value={last4} onChange={(e) => setLast4(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" placeholder="1234"
           className="w-full border border-[#C8DCC6] rounded-xl px-3 py-3 text-lg tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-[#6B9467]" />
 
