@@ -73,7 +73,7 @@ export function parseEmail(from: string, subject: string, body: string): Parsed 
     const kind: Parsed["kind"] = /hủy|huỷ|cancel/i.test(s) ? "CANCEL" : /thay đổi|amend|modif|changed/i.test(s) ? "CHANGE"
       : /xác nhận|confirm|đặt phòng mới|new booking|booking id/i.test(s) ? "NEW" : /tin nhắn|message/i.test(s) ? "MESSAGE" : "OTHER";
     const code = (s.match(/\b(\d{8,11})\b/) ?? b.match(/(?:booking id|mã đặt phòng|số đặt phòng|booking no)\D{0,20}(\d{8,11})/i) ?? [])[1] ?? null;
-    const nameTxt = after(b, /(tên khách|guest name|customer name|tên khách hàng)\s*:?\s*/i, 60);
+    const nameTxt = after(b, /(tên khách hàng|tên khách|guest name|customer name)\s*:?\s*/i, 60);
     const guestName = nameTxt ? nameTxt.split(/\n|\s{2,}|\|/)[0].trim() || null : null;
     const guests = Number((b.match(/(\d{1,2})\s*(?:người lớn|khách|adults?|guests?)\b/i) ?? [])[1]) || null;
     const netTxt = after(b, /(net rate|số tiền thực nhận|giá thực nhận|amount to (?:be )?(?:paid|receive))\s*:?\s*/i, 60);

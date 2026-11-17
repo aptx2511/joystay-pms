@@ -273,7 +273,7 @@ export async function importOtaBookings(channel: LedgerChannel, list: OtaBooking
   const named = uniq.filter((d) => d.guestName);
   const pmsList = await prisma.booking.findMany({ where: { confirmationCode: { in: named.map((d) => d.code) } }, select: { id: true, confirmationCode: true, guestName: true } });
   const byCode = new Map(named.map((d) => [d.code, d.guestName!]));
-  const ups = pmsList.filter((b) => b.guestName !== byCode.get(b.confirmationCode!) && (GENERIC_NAME.test(b.guestName) || byCode.get(b.confirmationCode!)!.startsWith(b.guestName.split(" ")[0])))
+  const ups = pmsList.filter((b) => b.guestName !== byCode.get(b.confirmationCode!) && (GENERIC_NAME.test(b.guestName) || /^hàng\s/i.test(b.guestName) || byCode.get(b.confirmationCode!)!.startsWith(b.guestName.split(" ")[0])))
     .map((b) => prisma.booking.update({ where: { id: b.id }, data: { guestName: byCode.get(b.confirmationCode!)! } }));
   for (let i = 0; i < ups.length; i += 10) await Promise.all(ups.slice(i, i + 10));
   return { bookings: uniq.length, renamed: ups.length };
