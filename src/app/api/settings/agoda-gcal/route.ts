@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
  * PUT  { links: { roomId: url } } → lưu link
  */
 const PREFIX = "agoda_gcal:";
-export const SEEN_KEY = "gcal_bridge_seen";
+const SEEN_KEY = "gcal_bridge_seen";
 const STALE_MS = 60 * 60_000;
 
 export async function GET() {
