@@ -27,10 +27,13 @@ function escapeText(text: string): string {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ roomId: string }> }
 ) {
-  const { roomId } = await params;
+  const { roomId: rawId } = await params;
+  const roomId = rawId.replace(/\.ics$/i, "");
+  // ?plain=1 (dùng cho Agoda): chỉ ký tự ASCII, không tên khách, giống định dạng iCal của Airbnb
+  const plain = new URL(request.url).searchParams.has("plain");
 
   const room = await prisma.room.findUnique({
     where: { id: roomId },
@@ -63,6 +66,17 @@ export async function GET(
       const dtstart = toICalDate(new Date(booking.checkIn));
       const dtend = toICalDate(new Date(booking.checkOut));
 
+      if (plain) {
+        return [
+          "BEGIN:VEVENT",
+          `DTEND;VALUE=DATE:${dtend}`,
+          `DTSTART;VALUE=DATE:${dtstart}`,
+          `UID:${uid}`,
+          `DTSTAMP:${dtstamp}`,
+          `SUMMARY:${booking.status === "BLOCKED" ? "Not available" : "Reserved"}`,
+          "END:VEVENT",
+        ].join("\r\n");
+      }
       return [
         "BEGIN:VEVENT",
         `UID:${uid}`,
@@ -78,7 +92,11 @@ export async function GET(
     })
     .join("\r\n");
 
-  const lines = [
+  const lines = plain
+    ? ["BEGIN:VCALENDAR", "PRODID:-//Joystay PMS//EN", "CALSCALE:GREGORIAN", "VERSION:2.0", events, "END:VCALENDAR", ""]
+        .filter((l, i, a) => l !== "" || i === a.length - 1)
+        .join("\r\n")
+    : [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Joystay PMS//EN",
