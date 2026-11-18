@@ -34,6 +34,13 @@ export async function GET(
   const roomId = rawId.replace(/\.ics$/i, "");
   // ?plain=1 (dùng cho Agoda): chỉ ký tự ASCII, không tên khách, giống định dạng iCal của Airbnb
   const plain = new URL(request.url).searchParams.has("plain");
+  // Nhịp tim cầu lịch Google → Agoda: Apps Script đọc ?plain=1 mỗi 15 phút
+  if (plain && /Google-Apps-Script/i.test(request.headers.get("user-agent") ?? "")) {
+    const now = new Date().toISOString();
+    await prisma.appSetting
+      .upsert({ where: { key: "gcal_bridge_seen" }, create: { key: "gcal_bridge_seen", value: now }, update: { value: now } })
+      .catch(() => {});
+  }
 
   const room = await prisma.room.findUnique({
     where: { id: roomId },

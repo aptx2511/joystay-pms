@@ -23,6 +23,17 @@ export default function SettingsPage() {
   const [newRoom,  setNewRoom]  = useState({ name: "The Matcha Bath Loft", size: "50", price: "1490000", weekend: "1590000" });
   const [creating, setCreating] = useState(false);
   const [createMsg, setCreateMsg] = useState<string | null>(null);
+  const [gcal, setGcal] = useState<{ links: Record<string, string>; seenAt: string | null; stale: boolean } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings/agoda-gcal").then((r) => (r.ok ? r.json() : null)).then(setGcal).catch(() => {});
+  }, []);
+
+  function copyText(key: string, text: string) {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  }
 
   useEffect(() => {
     fetch("/api/rooms")
@@ -191,6 +202,17 @@ export default function SettingsPage() {
           <strong>Export:</strong> Copy URL export và dán vào mục Calendar Sync của từng kênh để kênh đó biết lịch booking trực tiếp.
         </p>
 
+        {gcal && (
+          <div className={`text-sm rounded-xl px-4 py-3 border ${gcal.stale ? "bg-red-50 border-red-200 text-red-800" : "bg-sky-50 border-sky-200 text-sky-800"}`}>
+            <strong>Lịch cho Agoda (Google Calendar):</strong> Agoda không nhận link PMS, nên Apps Script
+            &ldquo;Joystay – Lịch PMS cho Agoda&rdquo; (Google hung251197) chép lịch PMS sang Google Calendar mỗi 15 phút, Agoda đọc link Google bên dưới từng phòng.
+            <br />
+            {gcal.seenAt
+              ? <>Lần đồng bộ gần nhất: {new Date(gcal.seenAt).toLocaleString("vi-VN")}{gcal.stale && " — ⚠️ quá 1 tiếng, kiểm tra Apps Script!"}</>
+              : "Chưa ghi nhận lần đồng bộ nào."}
+          </div>
+        )}
+
         {/* Add new room */}
         <div className="bg-white rounded-xl border border-dashed border-amber-300 shadow-sm p-5">
           <h3 className="font-semibold text-gray-800 mb-3">Thêm phòng mới</h3>
@@ -325,6 +347,27 @@ export default function SettingsPage() {
                 {saving[room.id] ? "Saving…" : "Save Room"}
               </button>
             </div>
+
+            {/* Google Calendar cho Agoda */}
+            {gcal?.links[room.id] && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">
+                  Lịch cho Agoda (Google) — đã gắn vào Agoda Calendar connections
+                </label>
+                <div className="flex gap-2 items-center">
+                  <code className="flex-1 text-xs bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-gray-600 truncate">
+                    {gcal.links[room.id]}
+                  </code>
+                  <button
+                    onClick={() => copyText("g" + room.id, gcal.links[room.id])}
+                    className="flex items-center gap-1 text-sm px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                  >
+                    {copied === "g" + room.id ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+                    {copied === "g" + room.id ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Export URL */}
             <div>

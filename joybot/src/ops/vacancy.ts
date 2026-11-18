@@ -67,3 +67,20 @@ export async function financeWeeklyTick() {
     console.warn("[Finance] báo cáo tuần lỗi:", (e as Error).message);
   }
 }
+
+/** Cảnh báo khi cầu lịch PMS → Google → Agoda (Apps Script) ngừng chạy quá 1 tiếng. Kiểm tra mỗi 10 phút. */
+export async function gcalBridgeTick() {
+  try {
+    const { data } = await pms.get<{ seenAt: string | null; stale: boolean }>("/settings/agoda-gcal");
+    if (!data.seenAt || !data.stale) return;
+    const key = `gcal_bridge_alert:${data.seenAt}`;
+    if (await store.getKv(key).catch(() => null)) return;
+    await notifyOwner(
+      `⚠️ Lịch PMS → Agoda (Apps Script Google) chưa chạy từ ${new Date(data.seenAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}.\n` +
+        "Agoda có thể không biết booking trực tiếp / Booking.com mới → nguy cơ trùng phòng. Mở script.google.com → \"Joystay – Lịch PMS cho Agoda\" → Executions để xem lỗi.",
+    );
+    await store.setKv(key, new Date().toISOString()).catch(() => {});
+  } catch (e) {
+    console.warn("[GcalBridge] kiểm tra lỗi:", (e as Error).message);
+  }
+}
