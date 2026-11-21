@@ -19,10 +19,11 @@ const DEFAULT_ROOM_LOCKS: Record<string, number> = {
 };
 
 /** Khoá lối vào chung — ghi đè bằng env ENTRANCE_LOCKS_JSON, vd [{"name":"Cửa nhà","lockId":29769774}] */
-const DEFAULT_ENTRANCE: { name: string; lockId: number }[] = [
+/** optional: cấp được thì tốt, lỗi (bộ phát, trùng mã…) thì BỎ QUA — vẫn cấp cửa nhà/cổng/phòng như bình thường (chủ quyết định 22/11) */
+const DEFAULT_ENTRANCE: { name: string; lockId: number; optional?: boolean }[] = [
   { name: "Main door · Cửa nhà", lockId: 29769774 },
   { name: "Inner gate · Cổng trong", lockId: 29747718 },
-  { name: "Parking · Cửa bãi xe", lockId: 36788936 }, // S534_0d811e — thêm 21/11/2026: mã khách mở cả bãi xe
+  { name: "Parking · Cửa bãi xe", lockId: 36788936, optional: true }, // S534_0d811e — thêm 21/11/2026: mã khách mở cả bãi xe
 ];
 
 function parse<T>(raw: string | undefined, fallback: T): T {
@@ -54,12 +55,16 @@ export async function issueDoorCodes(p: {
   const validFrom = vnTime(p.checkIn, CODE_FROM);
   const validTo = vnTime(p.checkOut, config.booking.checkOutTime || "12:00");
   const name = `${p.code} ${p.guestName}`;
-  const doors = [...ENTRANCE_LOCKS, { name: `Room ${p.roomNo} · Phòng ${p.roomNo}`, lockId: roomLock }];
+  const doors: { name: string; lockId: number; optional?: boolean }[] = [...ENTRANCE_LOCKS, { name: `Room ${p.roomNo} · Phòng ${p.roomNo}`, lockId: roomLock }];
+  const skipped: string[] = []; // cửa tuỳ chọn (bãi xe) không cấp được → bỏ qua
 
   if ((process.env.DOOR_CODE_MODE ?? "same4") === "random") {
     const codes: DoorCode[] = [];
-    for (const d of doors) codes.push({ door: d.name, lockId: d.lockId, ...(await periodPasscode(d.lockId, validFrom, validTo, name)), custom: false });
-    return { ok: true, codes, validFrom, validTo, sharedCode: null, note: "mã tự sinh cho từng cửa" };
+    for (const d of doors) {
+      try { codes.push({ door: d.name, lockId: d.lockId, ...(await periodPasscode(d.lockId, validFrom, validTo, name)), custom: false }); }
+      catch (e) { if (!d.optional) throw e; skipped.push(d.name); }
+    }
+    return { ok: true, codes, validFrom, validTo, sharedCode: null, note: "mã tự sinh cho từng cửa" + (skipped.length ? ` · ${skipped.join(", ")}: chưa cấp được, đã bỏ qua` : "") };
   }
 
   const random4 = () => String(Math.floor(1000 + Math.random() * 9000));
@@ -80,10 +85,18 @@ export async function issueDoorCodes(p: {
   for (const [attempt, code] of candidates.entries()) {
     const codes: DoorCode[] = [];
     let dup = false;
+    skipped.length = 0;
     for (const d of doors) {
       try {
         codes.push({ door: d.name, lockId: d.lockId, ...(await customPasscode(d.lockId, code, validFrom, validTo, name)), custom: true });
       } catch (e) {
+        if (d.optional) {
+          // cửa tuỳ chọn: dùng lại nếu mã đã có sẵn, còn lại bỏ qua — KHÔNG chặn cấp mã cửa nhà/cổng/phòng
+          const mine = await listPasscodes(d.lockId).then((l) => l.find((x) => String(x.keyboardPwd) === code)).catch(() => undefined);
+          if (mine) codes.push({ door: d.name, lockId: d.lockId, passcode: code, passcodeId: Number(mine.keyboardPwdId), custom: true, existing: true });
+          else { console.warn(`[Doors] ${d.name}: bỏ qua (${(e as Error).message})`); skipped.push(d.name); }
+          continue;
+        }
         if (isDup(e) && hasPref && code === pref) {
           // chủ đã tự tạo đúng mã này trên khoá (vd khách đã nhận tin Airbnb) và mã còn hiệu lực tới giờ trả phòng → dùng lại
           const mine = await listPasscodes(d.lockId).then((l) => l.find((x) => String(x.keyboardPwd) === code)).catch(() => undefined);
@@ -109,7 +122,7 @@ export async function issueDoorCodes(p: {
       const why = attempt === 0 && code === pref ? "4 số cuối ĐT khách (trùng mã Airbnb gửi khách)" : attempt === 0 ? "4 số ngẫu nhiên (không có 4 số cuối ĐT → Airbnb KHÔNG điền được mã, khách phải xem trang lưu trú)" : "4 số ngẫu nhiên (4 số cuối ĐT bị trùng)";
       return {
         ok: true, codes, validFrom, validTo, sharedCode: code,
-        note: `mã chung ${code} = ${why}` + (fallback.length ? ` · ⚠️ ${fallback.join(", ")} dùng mã tự sinh khác — mã Airbnb gửi KHÔNG mở được cửa này, nhắn khách ngay!` : ""),
+        note: `mã chung ${code} = ${why}` + (skipped.length ? ` · ${skipped.join(", ")}: chưa cấp được, đã bỏ qua` : "") + (fallback.length ? ` · ⚠️ ${fallback.join(", ")} dùng mã tự sinh khác — mã Airbnb gửi KHÔNG mở được cửa này, nhắn khách ngay!` : ""),
       };
     }
     // trùng mã: gỡ các mã đã thêm ở lượt này rồi thử số khác
@@ -150,7 +163,7 @@ export async function reconcileBookingCodes(p: {
   const hour = (ms: number) => Math.floor(ms / 3_600_000) * 3_600_000;
   for (const d of doors) {
     let list;
-    try { list = await listPasscodes(d.lockId); } catch (e) { out.errors.push(`${d.name}: ${(e as Error).message}`); continue; }
+    try { list = await listPasscodes(d.lockId); } catch (e) { if (!(d as { optional?: boolean }).optional) out.errors.push(`${d.name}: ${(e as Error).message}`); continue; }
     const mine = list.filter((x) => p.codes.includes(String(x.keyboardPwd)) && p.names.some((n) => (x.keyboardPwdName ?? "").startsWith(n)));
     for (const x of mine) {
       try {
@@ -159,7 +172,7 @@ export async function reconcileBookingCodes(p: {
           await changePasscodePeriod(d.lockId, Number(x.keyboardPwdId), from, to);
           out.changed.push(`${d.name} ${x.keyboardPwd}`);
         }
-      } catch (e) { out.errors.push(`${d.name} ${x.keyboardPwd}: ${(e as Error).message}`); }
+      } catch (e) { if (!(d as { optional?: boolean }).optional) out.errors.push(`${d.name} ${x.keyboardPwd}: ${(e as Error).message}`); }
     }
   }
   return out;

@@ -182,7 +182,10 @@ async function addMissingEntranceCodes(it: AuditItem) {
     await notifyOwner(`🅿️ Đã thêm mã ${code} cho ${added.map((a) => a.door).join(", ")} · ${it.guestName} · phòng ${it.roomNo} · ${it.checkIn}→${it.checkOut}. Trang lưu trú đã cập nhật.
 Nếu khách đã nhận mã trước đó: báo khách mã ${code} mở được cả ${added.map((a) => a.door.split(" · ")[1] ?? a.door).join(", ").toLowerCase()}.`);
   }
-  if (problems.length) await alert(`🚨 Chưa thêm được mã ${code} (${it.guestName}, phòng ${it.roomNo}) cho: ${problems.join("; ")}
+  // cửa tuỳ chọn (bãi xe) lỗi → chỉ ghi log, không báo chủ (chủ quyết định 22/11: không cấp được bãi xe thì thôi)
+  const mustAlert = problems.filter((x) => !ENTRANCE_LOCKS.some((e) => e.optional && x.startsWith(e.name)));
+  if (problems.length > mustAlert.length) console.warn(`[Codes] ${it.code}: bỏ qua ${problems.length - mustAlert.length} cửa tuỳ chọn`);
+  if (mustAlert.length) await alert(`🚨 Chưa thêm được mã ${code} (${it.guestName}, phòng ${it.roomNo}) cho: ${mustAlert.join("; ")}
 → Kiểm tra bộ phát/khoá bãi xe hoặc tạo tay mã ${code} trong app TTLock. Bot thử lại mỗi giờ.`);
 }
 
