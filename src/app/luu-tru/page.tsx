@@ -15,7 +15,7 @@ interface Stay {
 }
 interface Data { today: string; lookupLink: string; stays: Stay[] }
 
-const DEFAULT_DOORS = ["Main door · Cửa nhà", "Inner gate · Cổng trong", "Phòng"];
+const DEFAULT_DOORS = ["Main door · Cửa nhà", "Inner gate · Cổng trong", "Parking · Cửa bãi xe", "Phòng"];
 const ddmm = (k: string) => `${k.slice(8, 10)}/${k.slice(5, 7)}`;
 const time = (iso: string | null) => (iso ? new Date(iso).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", timeZone: "Asia/Ho_Chi_Minh" }) : "");
 

@@ -22,6 +22,7 @@ const DEFAULT_ROOM_LOCKS: Record<string, number> = {
 const DEFAULT_ENTRANCE: { name: string; lockId: number }[] = [
   { name: "Main door · Cửa nhà", lockId: 29769774 },
   { name: "Inner gate · Cổng trong", lockId: 29747718 },
+  { name: "Parking · Cửa bãi xe", lockId: 36788936 }, // S534_0d811e — thêm 21/11/2026: mã khách mở cả bãi xe
 ];
 
 function parse<T>(raw: string | undefined, fallback: T): T {

@@ -2,6 +2,7 @@ import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import { config } from "./config";
 import { chat } from "./joybot";
+// Autopilot marketing tạm tắt 19/11/2026 (không hiệu quả) — bật lại: AUTOPILOT_ENABLED=1
 import autopilotRouter from "./autopilot/routes";
 import { channelOf, outbox, InboundMessage } from "./channels";
 import { parseMetaWebhook, verifyMetaSignature } from "./channels/meta";
@@ -119,8 +120,9 @@ app.post("/hooks/pms-changed", (req, res) => {
   void issuePendingCodes();
 });
 
-// ── Autopilot (giữ nguyên) ──────────────────────────────────────────────────
-app.use("/autopilot", autopilotRouter);
+// ── Autopilot marketing: TẠM TẮT (không gọi Claude API) ─────────────────────
+if (process.env.AUTOPILOT_ENABLED === "1") app.use("/autopilot", autopilotRouter);
+else app.use("/autopilot", (_req, res) => { res.status(503).json({ error: "Autopilot marketing đang tạm tắt" }); });
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("[Error]", err.message);

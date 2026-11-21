@@ -9,8 +9,12 @@ import axios from "axios";
 import { config } from "../config";
 import { store } from "../store";
 import { notifyOwner } from "../notify/telegram";
-import { issueDoorCodes, reconcileBookingCodes } from "../locks/doors";
-import { listGateways, ttlockConfigured } from "../locks/ttlock";
+import { ENTRANCE_LOCKS, issueDoorCodes, reconcileBookingCodes } from "../locks/doors";
+import { customPasscode, listGateways, listPasscodes, ttlockConfigured, TTLockError } from "../locks/ttlock";
+
+/** Tên các cửa chung bằng tiếng Việt, vd "Cửa nhà, Cổng trong, Cửa bãi xe" */
+const entranceVi = () => ENTRANCE_LOCKS.map((e) => (e.name.split(" · ")[1] ?? e.name)).join(", ");
+const entranceEn = () => ENTRANCE_LOCKS.map((e) => e.name.split(" · ")[0].toLowerCase()).join(", ");
 
 const pms = axios.create({
   baseURL: config.pms.baseUrl,
@@ -36,13 +40,13 @@ function guestCodeMessage(p: Pending, code: string) {
   const fl = FLOOR[(p.roomNo ?? "")[0]] ?? "";
   return [
     `Hi! Your door code for Joystay, room ${p.roomNo}${fl ? ` (${fl.split(" / ")[0]}, stairs only)` : ""}: ${code}`,
-    `It opens the main door, the inner gate and your room door, valid from 12:00 ${ddmm(p.checkIn)} to 12:00 ${ddmm(p.checkOut)}. Check-in from 15:00.`,
+    `It opens the ${entranceEn()} and your room door, valid from 12:00 ${ddmm(p.checkIn)} to 12:00 ${ddmm(p.checkOut)}. Check-in from 15:00.`,
     `Address: 382/23 Nguyễn Thị Minh Khai, Ward 5, District 3, HCMC — https://maps.app.goo.gl/1dreN6KLAHZEqRuc6`,
     `To unlock: touch the keypad to wake it, enter ${code} then press #.`,
     ...(p.portalUrl ? [`Your stay page (check-in guide${p.payDue ? `, bank-transfer QR for ${p.payDue.toLocaleString("vi-VN")} VND` : ""}): ${p.portalUrl}`] : []),
     `Payment: cash or bank transfer only (card payment is not available). Hotline/WhatsApp: 0898 888 457.`,
     ``,
-    `Mã cửa phòng ${p.roomNo}${fl ? ` (${fl.split(" / ")[1]}, chỉ có thang bộ)` : ""}: ${code} — mở cửa nhà, cổng trong và cửa phòng, hiệu lực 12:00 ${ddmm(p.checkIn)} → 12:00 ${ddmm(p.checkOut)}. Nhận phòng từ 15:00. Thanh toán tiền mặt hoặc chuyển khoản (không quẹt thẻ).`,
+    `Mã cửa phòng ${p.roomNo}${fl ? ` (${fl.split(" / ")[1]}, chỉ có thang bộ)` : ""}: ${code} — mở ${entranceVi().toLowerCase()} và cửa phòng, hiệu lực 12:00 ${ddmm(p.checkIn)} → 12:00 ${ddmm(p.checkOut)}. Nhận phòng từ 15:00. Thanh toán tiền mặt hoặc chuyển khoản (không quẹt thẻ).`,
   ].join("\n");
 }
 
@@ -80,7 +84,7 @@ export async function issuePendingCodes() {
         if (!last || Date.now() - Date.parse(last) >= ALERT_EVERY_MS) {
           await store.setKv(failKey, new Date().toISOString()).catch(() => {});
           const pin = p.phoneLast4 ? `Airbnb gửi khách mã ${p.phoneLast4} (4 số cuối ĐT) — mã này CHƯA có trên khoá!` : "Khách chưa có mã.";
-          await notifyOwner(`🚨 CHƯA CẤP ĐƯỢC MÃ CỬA · phòng ${p.roomNo} · ${p.code} · nhận ${p.checkIn}\n${pin}\nLý do: ${r.reason}\n→ Cách xử lý nhanh: mở app TTLock tại nhà (Bluetooth), tạo mã ${p.phoneLast4 ?? "4 số"} cho Cửa nhà, Cổng trong, Phòng ${p.roomNo} (từ 12:00 ${p.checkIn} → 12:00 ${p.checkOut}); rồi nhập mã ở PMS → Lưu trú. Bot nhắc lại mỗi ${ALERT_EVERY_MS / 3_600_000}h tới khi xong.`);
+          await notifyOwner(`🚨 CHƯA CẤP ĐƯỢC MÃ CỬA · phòng ${p.roomNo} · ${p.code} · nhận ${p.checkIn}\n${pin}\nLý do: ${r.reason}\n→ Cách xử lý nhanh: mở app TTLock tại nhà (Bluetooth), tạo mã ${p.phoneLast4 ?? "4 số"} cho ${entranceVi()}, Phòng ${p.roomNo} (từ 12:00 ${p.checkIn} → 12:00 ${p.checkOut}); rồi nhập mã ở PMS → Lưu trú. Bot nhắc lại mỗi ${ALERT_EVERY_MS / 3_600_000}h tới khi xong.`);
         }
       }
     }
@@ -133,6 +137,55 @@ interface AuditItem {
   checkIn: string; checkOut: string; codes: { door: string; code: string }[]; sharedWithActive: boolean;
 }
 
+/**
+ * Cửa chung mới (vd Cửa bãi xe, thêm 21/11/2026): booking đã có mã TTLock nhưng thiếu cửa đó → cài CÙNG mã lên khoá mới
+ * và cập nhật trang lưu trú. Không cài được cùng mã (bộ phát mất mạng / trùng) → báo chủ, thử lại mỗi giờ (báo tối đa 6h/lần).
+ */
+async function addMissingEntranceCodes(it: AuditItem) {
+  if (!it.codes.length) return;
+  const have = new Set(it.codes.map((c) => c.door));
+  const missing = ENTRANCE_LOCKS.filter((e) => !have.has(e.name));
+  if (!missing.length) return;
+  const shared = [...new Set(it.codes.map((c) => c.code))];
+  const failKey = `entrance_fail:${it.bookingId}`;
+  const alert = async (msg: string) => {
+    const last = await store.getKv(failKey).catch(() => null);
+    if (last && Date.now() - Date.parse(last) < 6 * 3_600_000) return;
+    await store.setKv(failKey, new Date().toISOString()).catch(() => {});
+    await notifyOwner(msg);
+  };
+  if (shared.length !== 1) {
+    await alert(`⚠️ Booking ${it.code} (${it.guestName}, phòng ${it.roomNo}) có nhiều mã khác nhau (${shared.join("/")}) → bot không tự thêm ${missing.map((m) => m.name).join(", ")}. Tạo tay trong app TTLock rồi nhập ở PMS → Lưu trú.`);
+    return;
+  }
+  const code = shared[0];
+  const from = Date.parse(`${it.checkIn}T${(process.env.DOOR_CODE_FROM || "12:00").padStart(5, "0")}:00+07:00`);
+  const to = Date.parse(`${it.checkOut}T${(config.booking.checkOutTime || "12:00").padStart(5, "0")}:00+07:00`);
+  if (to <= Date.now()) return;
+  const name = `${it.code} ${it.guestName}`;
+  const added: { door: string; code: string }[] = [];
+  const problems: string[] = [];
+  for (const d of missing) {
+    try {
+      await customPasscode(d.lockId, code, Math.max(from, Date.now() - 3_600_000), to, name);
+      added.push({ door: d.name, code });
+    } catch (e) {
+      const dup = e instanceof TTLockError && /exist|repeat|duplicat|same|already/i.test(e.message);
+      const mine = dup ? await listPasscodes(d.lockId).then((l) => l.find((x) => String(x.keyboardPwd) === code)).catch(() => undefined) : undefined;
+      if (mine) { added.push({ door: d.name, code }); continue; } // mã đã có sẵn trên khoá
+      problems.push(`${d.name}: ${(e as Error).message}`);
+    }
+  }
+  if (added.length) {
+    await pms.patch(`/stay/admin/${it.bookingId}`, { doorCodes: [...it.codes, ...added], source: "TTLOCK" });
+    await store.setKv(failKey, "").catch(() => {});
+    await notifyOwner(`🅿️ Đã thêm mã ${code} cho ${added.map((a) => a.door).join(", ")} · ${it.guestName} · phòng ${it.roomNo} · ${it.checkIn}→${it.checkOut}. Trang lưu trú đã cập nhật.
+Nếu khách đã nhận mã trước đó: báo khách mã ${code} mở được cả ${added.map((a) => a.door.split(" · ")[1] ?? a.door).join(", ").toLowerCase()}.`);
+  }
+  if (problems.length) await alert(`🚨 Chưa thêm được mã ${code} (${it.guestName}, phòng ${it.roomNo}) cho: ${problems.join("; ")}
+→ Kiểm tra bộ phát/khoá bãi xe hoặc tạo tay mã ${code} trong app TTLock. Bot thử lại mỗi giờ.`);
+}
+
 /** Mỗi giờ: booking HUỶ → xoá mã trên khoá; booking ĐỔI NGÀY → sửa hạn mã cho khớp. Báo chủ qua Telegram. */
 export async function auditCodes() {
   if (!ttlockConfigured()) return;
@@ -156,6 +209,7 @@ export async function auditCodes() {
           await notifyOwner(`🔁 Booking ${it.code} (${it.guestName}, phòng ${it.roomNo}) đổi ngày → bot đã sửa hạn mã ${codes.join("/")} thành 12:00 ${it.checkIn} → 12:00 ${it.checkOut} trên: ${r.changed.join(", ")}`);
         }
         if (r.errors.length) console.warn(`[Codes] ${it.code}: ${r.errors.join("; ")}`);
+        await addMissingEntranceCodes(it).catch((e: Error) => console.warn(`[Codes] thêm cửa chung ${it.code}:`, e.message));
       }
     }
   } catch (e) {
