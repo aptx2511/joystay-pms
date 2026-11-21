@@ -128,3 +128,8 @@ src/
 - JINGHAO (Agoda 1799506598) đã chuyển sang 202 Pop Art trong PMS (Khang ở 201).
 - 18/11 23:16: XONG cầu lịch. Apps Script đã chạy setup() (trigger sync mỗi 15 phút). 6 lịch Google "Joystay PMS – <phòng>" đã gắn vào 6 room type Agoda với tên "Joystay PMS", cả 6 đồng bộ thành công. Agoda giờ đọc: Airbnb + Joystay PMS (302 thêm Airbnb Parisian). Các ngày đóng tay hôm nay (Closed) vẫn giữ – nếu huỷ booking phải mở tay lại.
 - PMS /settings giờ hiện "Lịch cho Agoda (Google)" từng phòng + giờ đồng bộ gần nhất (AppSetting agoda_gcal:<roomId>, gcal_bridge_seen ghi khi Apps Script đọc ?plain=1). JoyBot gcalBridgeTick cảnh báo Telegram nếu quá 1 tiếng không đồng bộ.
+
+## 21/11/2026
+- Autopilot marketing (JoyBot /autopilot) TẠM TẮT — trả 503; bật lại: biến AUTOPILOT_ENABLED=1 trên Railway. Claude API giờ chỉ dùng cho JoyBot chat (claude-sonnet-5-5).
+- Khoá bãi xe TTLock "cửa bãi xe" S534_0d811e, lockId 36788936 → thêm vào cửa chung (Parking · Cửa bãi xe): khách dùng CÙNG mã 4 số với cửa nhà/cổng/phòng. auditCodes mỗi giờ tự thêm mã bãi xe cho booking đã cấp mã trước đó. Nếu Railway có ENTRANCE_LOCKS_JSON thì phải thêm khoá này vào biến.
+- Giá Airbnb: 401 Matcha đang có khuyến mãi chỗ ở mới 20%, 202 Pop Art có ưu đãi phút chót 7% → giá gốc đặt trên Airbnb = giá muốn khách thấy ÷ (1 − %giảm).
