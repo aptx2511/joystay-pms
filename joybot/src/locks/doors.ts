@@ -106,6 +106,18 @@ export async function issueDoorCodes(p: {
             codes.push({ door: d.name, lockId: d.lockId, passcode: code, passcodeId: Number(mine.keyboardPwdId), custom: true, existing: true });
             continue;
           }
+          // CÙNG KHÁCH đặt thêm phòng (vd 2 phòng, ngày trả khác nhau): mã ở cửa chung là của booking kia → gia hạn tới ngày trả muộn hơn rồi dùng chung
+          const sameGuest = mine && p.guestName && (mine.keyboardPwdName ?? "").toLowerCase().includes(p.guestName.toLowerCase());
+          if (mine && sameGuest && ENTRANCE_LOCKS.some((e) => e.lockId === d.lockId)) {
+            const start = Math.min(Number(mine.startDate || validFrom), validFrom);
+            const end = Math.max(Number(mine.endDate || 0), validTo);
+            try {
+              await changePasscodePeriod(d.lockId, Number(mine.keyboardPwdId), start, end);
+              console.log(`[Doors] ${d.name}: mã ${code} của cùng khách → gia hạn tới ${new Date(end).toISOString()} và dùng chung`);
+              codes.push({ door: d.name, lockId: d.lockId, passcode: code, passcodeId: Number(mine.keyboardPwdId), custom: true, existing: true });
+              continue;
+            } catch (e2) { console.warn(`[Doors] ${d.name}: gia hạn mã ${code} lỗi (${(e2 as Error).message})`); }
+          }
         }
         if (isDup(e)) { dup = true; break; }
         if (isGatewayDown(e) && !allowFallback) {
@@ -154,6 +166,8 @@ export function doorCodesText(codes: DoorCode[], checkIn: string, checkOut: stri
  */
 export async function reconcileBookingCodes(p: {
   codes: string[]; names: string[]; roomNo?: string | null; checkIn: string; checkOut: string; remove: boolean;
+  /** cửa chung: mã đang được booking khác (cùng mã, còn hiệu lực) dùng tới ngày này → không rút ngắn/không xoá */
+  sharedUntil?: string | null;
 }): Promise<{ changed: string[]; removed: string[]; errors: string[] }> {
   const out = { changed: [] as string[], removed: [] as string[], errors: [] as string[] };
   const roomLock = p.roomNo ? ROOM_LOCKS[p.roomNo] : undefined;
@@ -161,16 +175,25 @@ export async function reconcileBookingCodes(p: {
   const from = vnTime(p.checkIn, CODE_FROM);
   const to = vnTime(p.checkOut, config.booking.checkOutTime || "12:00");
   const hour = (ms: number) => Math.floor(ms / 3_600_000) * 3_600_000;
+  const entranceIds = new Set(ENTRANCE_LOCKS.map((e) => e.lockId));
+  const sharedTo = p.sharedUntil ? vnTime(p.sharedUntil, config.booking.checkOutTime || "12:00") : 0;
   for (const d of doors) {
+    const shared = entranceIds.has(d.lockId) && sharedTo > 0;
     let list;
     try { list = await listPasscodes(d.lockId); } catch (e) { if (!(d as { optional?: boolean }).optional) out.errors.push(`${d.name}: ${(e as Error).message}`); continue; }
     const mine = list.filter((x) => p.codes.includes(String(x.keyboardPwd)) && p.names.some((n) => (x.keyboardPwdName ?? "").startsWith(n)));
     for (const x of mine) {
       try {
-        if (p.remove) { await deletePasscode(d.lockId, Number(x.keyboardPwdId)); out.removed.push(`${d.name} ${x.keyboardPwd}`); }
-        else if (x.endDate && (Math.abs(Number(x.endDate) - hour(to)) > 3_600_000 || Math.abs(Number(x.startDate ?? 0) - hour(from)) > 3_600_000)) {
-          await changePasscodePeriod(d.lockId, Number(x.keyboardPwdId), from, to);
-          out.changed.push(`${d.name} ${x.keyboardPwd}`);
+        if (p.remove) {
+          if (shared) { await changePasscodePeriod(d.lockId, Number(x.keyboardPwdId), Math.min(Number(x.startDate || from), from), sharedTo); out.changed.push(`${d.name} ${x.keyboardPwd} (booking khác còn dùng)`); continue; }
+          await deletePasscode(d.lockId, Number(x.keyboardPwdId)); out.removed.push(`${d.name} ${x.keyboardPwd}`);
+        } else {
+          const wantTo = shared ? Math.max(to, sharedTo) : to;
+          const wantFrom = shared ? Math.min(from, Number(x.startDate || from)) : from;
+          if (x.endDate && (Math.abs(Number(x.endDate) - hour(wantTo)) > 3_600_000 || Math.abs(Number(x.startDate ?? 0) - hour(wantFrom)) > 3_600_000)) {
+            await changePasscodePeriod(d.lockId, Number(x.keyboardPwdId), wantFrom, wantTo);
+            out.changed.push(`${d.name} ${x.keyboardPwd}`);
+          }
         }
       } catch (e) { if (!(d as { optional?: boolean }).optional) out.errors.push(`${d.name} ${x.keyboardPwd}: ${(e as Error).message}`); }
     }

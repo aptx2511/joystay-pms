@@ -194,19 +194,22 @@ export async function auditCodes() {
   if (!ttlockConfigured()) return;
   try {
     const { data } = await pms.get<{ items: AuditItem[] }>("/stay/bot", { params: { kind: "codes-audit" } });
+    // cùng 1 mã dùng cho nhiều booking còn hiệu lực (vd 1 khách đặt 2 phòng) → cửa chung giữ mã tới ngày trả muộn nhất
     for (const it of data.items) {
       const codes = [...new Set(it.codes.map((c) => c.code))];
       const names = [it.code, it.altCode];
+      const others = data.items.filter((x) => x.active && x.bookingId !== it.bookingId && x.codes.some((y) => codes.includes(y.code)));
+      const sharedUntil = others.length ? others.map((x) => x.checkOut).sort().at(-1)! : null;
       if (!it.active) {
         // huỷ: mã trùng với booking khác còn hiệu lực ở cùng phòng → chỉ gỡ khỏi PMS, không xoá trên khoá
         const r = it.sharedWithActive ? { removed: [], changed: [], errors: [] as string[] }
-          : await reconcileBookingCodes({ codes, names, roomNo: it.roomNo, checkIn: it.checkIn, checkOut: it.checkOut, remove: true });
+          : await reconcileBookingCodes({ codes, names, roomNo: it.roomNo, checkIn: it.checkIn, checkOut: it.checkOut, remove: true, sharedUntil });
         if (!r.errors.length) await pms.patch(`/stay/admin/${it.bookingId}`, { doorCodes: [], source: "MANUAL" }).catch(() => {});
         console.log(`[Codes] huỷ ${it.roomNo} ${it.code}: xoá ${r.removed.length}${r.errors.length ? ` · lỗi ${r.errors.join("; ")}` : ""}`);
         if (r.removed.length) await notifyOwner(`🗑 Booking ${it.code} (${it.guestName}, phòng ${it.roomNo}, ${it.checkIn}→${it.checkOut}) đã huỷ → bot đã XOÁ mã ${codes.join("/")} trên: ${r.removed.join(", ")}`);
         if (r.errors.length) await notifyOwner(`⚠️ Không xoá được mã ${codes.join("/")} của booking huỷ ${it.code} (phòng ${it.roomNo}): ${r.errors.join("; ")}\n→ Xoá tay trong app TTLock; bot thử lại mỗi giờ.`);
       } else {
-        const r = await reconcileBookingCodes({ codes, names, roomNo: it.roomNo, checkIn: it.checkIn, checkOut: it.checkOut, remove: false });
+        const r = await reconcileBookingCodes({ codes, names, roomNo: it.roomNo, checkIn: it.checkIn, checkOut: it.checkOut, remove: false, sharedUntil: sharedUntil && sharedUntil > it.checkOut ? sharedUntil : null });
         if (r.changed.length) {
           console.log(`[Codes] đổi hạn ${it.roomNo} ${it.code}: ${r.changed.join(", ")}`);
           await notifyOwner(`🔁 Booking ${it.code} (${it.guestName}, phòng ${it.roomNo}) đổi ngày → bot đã sửa hạn mã ${codes.join("/")} thành 12:00 ${it.checkIn} → 12:00 ${it.checkOut} trên: ${r.changed.join(", ")}`);
