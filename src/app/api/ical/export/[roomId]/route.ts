@@ -122,7 +122,9 @@ export async function GET(
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
       "Content-Disposition": `inline; filename="${roomId}.ics"`,
-      "Cache-Control": "no-cache, no-store, must-revalidate",
+      // Vercel CDN giữ bản lịch 10' → Airbnb/Booking/Agoda/Google đọc lại không đánh thức database Neon mỗi lần.
+      // ?plain=1 (Apps Script cầu lịch Agoda, chạy mỗi giờ) luôn đọc mới để ghi nhịp đồng bộ.
+      "Cache-Control": plain ? "no-store" : "public, max-age=0, s-maxage=600, stale-while-revalidate=600",
       "Access-Control-Allow-Origin": "*",
     },
   });

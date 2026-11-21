@@ -10,7 +10,7 @@ import { prisma } from "@/lib/prisma";
  */
 const PREFIX = "agoda_gcal:";
 const SEEN_KEY = "gcal_bridge_seen";
-const STALE_MS = 60 * 60_000;
+const STALE_MS = 3 * 60 * 60_000; // Apps Script chạy mỗi giờ
 
 export async function GET() {
   const rows = await prisma.appSetting.findMany({

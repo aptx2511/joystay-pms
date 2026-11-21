@@ -14,7 +14,7 @@ import { expireHolds } from "./booking/service";
 import { syncOtaCalendars } from "./booking/pms";
 import { bookableRooms } from "./booking/rooms";
 import { housekeepingTick } from "./ops/housekeeping";
-import { issuePendingCodes, stayTick } from "./ops/stay";
+import { auditCodes, issuePendingCodes, stayTick } from "./ops/stay";
 import { financeWeeklyTick, gcalBridgeTick, vacancyTick } from "./ops/vacancy";
 
 type RawReq = Request & { rawBody?: Buffer };
@@ -131,10 +131,27 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 // ── Tác vụ nền ───────────────────────────────────────────────────────────────
 setInterval(() => void expireHolds(), 60_000);
-setInterval(async () => { if (await syncOtaCalendars()) await issuePendingCodes(); }, config.booking.otaSyncMinutes * 60_000); // đồng bộ xong → cấp mã luôn
-setInterval(() => void stayTick(), 60_000); // cổng khách: cấp mã TTLock mỗi 15' · bản tin khách đến 07:30 & 20:00
+// ── Cửa sổ PMS (21/11/2026): gom mọi việc cần database PMS (Neon) vào CÙNG 1 lúc mỗi OTA_SYNC_MINUTES (mặc định 30')
+//    vào phút :00/:30 giờ VN → database được nghỉ (Neon tự tắt sau 5' không dùng) thay vì chạy 24/7 vì bị gọi lắt nhắt.
+let lastPmsSlot = "";
+async function pmsWindowTick() {
+  const every = Math.max(10, config.booking.otaSyncMinutes);
+  const vn = new Date(Date.now() + 7 * 3_600_000);
+  const mins = vn.getUTCHours() * 60 + vn.getUTCMinutes();
+  if (mins % every !== 0) return;
+  const slot = vn.toISOString().slice(0, 16);
+  if (slot === lastPmsSlot) return;
+  lastPmsSlot = slot;
+  await syncOtaCalendars().catch(() => false); // đồng bộ lịch OTA → PMS
+  await issuePendingCodes();                   // cấp mã cửa cho khách sắp đến
+  if (vn.getUTCMinutes() === 0) {              // mỗi giờ: đối chiếu mã (huỷ/đổi ngày/thêm cửa bãi xe) + kiểm tra cầu lịch Agoda
+    await auditCodes();
+    await gcalBridgeTick();
+  }
+}
+setInterval(() => void pmsWindowTick(), 60_000);
+setInterval(() => void stayTick(), 60_000); // cổng khách: kiểm tra bộ phát TTLock mỗi giờ · bản tin khách đến 07:30 & 20:00
 setInterval(() => void vacancyTick(), 60_000); // bản tin phòng trống + đề xuất 08:00 (giờ VN)
-setInterval(() => void gcalBridgeTick(), 10 * 60_000); // cảnh báo cầu lịch Google → Agoda ngừng chạy
 setInterval(() => void financeWeeklyTick(), 60_000); // báo cáo doanh thu tuần — thứ Hai 09:30 (giờ VN)
 setInterval(() => void housekeepingTick(), 60_000); // lịch dọn: CN 20:00 · 07:30 · 14:30 (giờ VN)
 

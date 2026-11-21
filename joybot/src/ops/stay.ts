@@ -217,8 +217,6 @@ export async function auditCodes() {
   }
 }
 
-let lastCodesRun = 0;
-let lastAudit = 0;
 let lastGatewayCheck = 0;
 
 /** Gọi mỗi phút từ index.ts */
@@ -227,14 +225,7 @@ export async function stayTick() {
   const date = vn.toISOString().slice(0, 10);
   const time = vn.toISOString().slice(11, 16);
 
-  if (Date.now() - lastCodesRun >= 15 * 60_000) {
-    lastCodesRun = Date.now();
-    await issuePendingCodes();
-  }
-  if (Date.now() - lastAudit >= 60 * 60_000) {
-    lastAudit = Date.now();
-    await auditCodes();
-  }
+  // cấp mã & đối chiếu mã: chạy trong "cửa sổ PMS" ở index.ts (gom lịch gọi database)
   if (Date.now() - lastGatewayCheck >= 60 * 60_000) {
     lastGatewayCheck = Date.now();
     await checkGateways();

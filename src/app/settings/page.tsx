@@ -205,10 +205,10 @@ export default function SettingsPage() {
         {gcal && (
           <div className={`text-sm rounded-xl px-4 py-3 border ${gcal.stale ? "bg-red-50 border-red-200 text-red-800" : "bg-sky-50 border-sky-200 text-sky-800"}`}>
             <strong>Lịch cho Agoda (Google Calendar):</strong> Agoda không nhận link PMS, nên Apps Script
-            &ldquo;Joystay – Lịch PMS cho Agoda&rdquo; (Google hung251197) chép lịch PMS sang Google Calendar mỗi 15 phút, Agoda đọc link Google bên dưới từng phòng.
+            &ldquo;Joystay – Lịch PMS cho Agoda&rdquo; (Google hung251197) chép lịch PMS sang Google Calendar mỗi giờ, Agoda đọc link Google bên dưới từng phòng.
             <br />
             {gcal.seenAt
-              ? <>Lần đồng bộ gần nhất: {new Date(gcal.seenAt).toLocaleString("vi-VN")}{gcal.stale && " — ⚠️ quá 1 tiếng, kiểm tra Apps Script!"}</>
+              ? <>Lần đồng bộ gần nhất: {new Date(gcal.seenAt).toLocaleString("vi-VN")}{gcal.stale && " — ⚠️ quá 3 tiếng, kiểm tra Apps Script!"}</>
               : "Chưa ghi nhận lần đồng bộ nào."}
           </div>
         )}

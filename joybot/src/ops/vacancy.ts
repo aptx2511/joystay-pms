@@ -68,7 +68,7 @@ export async function financeWeeklyTick() {
   }
 }
 
-/** Cảnh báo khi cầu lịch PMS → Google → Agoda (Apps Script) ngừng chạy quá 1 tiếng. Kiểm tra mỗi 10 phút. */
+/** Cảnh báo khi cầu lịch PMS → Google → Agoda (Apps Script) ngừng chạy quá 3 tiếng. Gọi mỗi giờ trong cửa sổ PMS. */
 export async function gcalBridgeTick() {
   try {
     const { data } = await pms.get<{ seenAt: string | null; stale: boolean }>("/settings/agoda-gcal");
