@@ -133,3 +133,10 @@ src/
 - Autopilot marketing (JoyBot /autopilot) TẠM TẮT — trả 503; bật lại: biến AUTOPILOT_ENABLED=1 trên Railway. Claude API giờ chỉ dùng cho JoyBot chat (claude-sonnet-5-5).
 - Khoá bãi xe TTLock "cửa bãi xe" S534_0d811e, lockId 36788936 → thêm vào cửa chung (Parking · Cửa bãi xe): khách dùng CÙNG mã 4 số với cửa nhà/cổng/phòng. auditCodes mỗi giờ tự thêm mã bãi xe cho booking đã cấp mã trước đó. Nếu Railway có ENTRANCE_LOCKS_JSON thì phải thêm khoá này vào biến.
 - Giá Airbnb: 401 Matcha đang có khuyến mãi chỗ ở mới 20%, 202 Pop Art có ưu đãi phút chót 7% → giá gốc đặt trên Airbnb = giá muốn khách thấy ÷ (1 − %giảm).
+
+## 22/11/2026
+- Neon (database PMS, project "joystau", gói Free 100 CU-giờ/tháng) báo 80% → đã gom việc JoyBot gọi PMS vào "cửa sổ" :00/:30 (OTA_SYNC_MINUTES=30 trên Railway), cache CDN lịch iCal 10', Apps Script cầu lịch Agoda chạy mỗi giờ. Nếu vẫn chạm 100% → nâng gói Launch (~10 USD/tháng).
+- Khoá bãi xe là TUỲ CHỌN: không cấp được thì bỏ qua, vẫn cấp cửa nhà/cổng/phòng.
+- Cùng khách đặt nhiều phòng (cùng 4 số cuối ĐT): mã ở cửa chung được gia hạn tới ngày trả muộn nhất và dùng chung.
+- Chủ chỉnh tay thời hạn mã trong app TTLock → bot KHÔNG sửa lại (bot ghi nhớ thời hạn nó đặt ở KV code_period:<lockId>:<pwdId>; khác đi = chủ chỉnh tay). Booking huỷ thì bot vẫn xoá mã.
+- Booking sát giờ (cùng ngày) được cấp mã ở cửa sổ :00/:30 kế tiếp (trễ tối đa ~30').

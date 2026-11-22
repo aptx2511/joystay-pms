@@ -4,6 +4,25 @@
  */
 import { config } from "../config";
 import { changePasscodePeriod, customPasscode, deletePasscode, listPasscodes, periodPasscode, ttlockConfigured, TTLockError } from "./ttlock";
+import { store } from "../store";
+
+/**
+ * Ghi nhớ thời hạn mà BOT đã đặt cho từng mã (chủ quyết định 22/11/2026):
+ * nếu sau đó thời hạn trên khoá KHÁC với lần bot đặt → chủ đã chỉnh tay trong app TTLock → bot KHÔNG được sửa lại thời hạn nữa.
+ */
+const HOUR = 3_600_000;
+const hourOf = (ms: number) => Math.floor(ms / HOUR) * HOUR;
+const periodKey = (lockId: number, id: number) => `code_period:${lockId}:${id}`;
+export async function rememberPeriod(lockId: number, id: number, startMs: number, endMs: number) {
+  await store.setKv(periodKey(lockId, id), `${hourOf(startMs)}|${hourOf(endMs)}`).catch(() => {});
+}
+/** "bot" = thời hạn vẫn như bot đặt · "manual" = chủ đã chỉnh tay · "unknown" = mã cũ chưa có ghi nhớ */
+async function periodOwner(lockId: number, x: { keyboardPwdId: number; startDate?: number; endDate?: number }): Promise<"bot" | "manual" | "unknown"> {
+  const rec = await store.getKv(periodKey(lockId, Number(x.keyboardPwdId))).catch(() => null);
+  if (!rec) return "unknown";
+  const [s, e] = rec.split("|").map(Number);
+  return Math.abs(Number(x.startDate ?? 0) - s) > HOUR || Math.abs(Number(x.endDate ?? 0) - e) > HOUR ? "manual" : "bot";
+}
 
 /** Giờ mã cửa bắt đầu mở được (giờ VN, ngày nhận phòng). Mặc định 12:00 — khách vẫn nhận phòng 15:00. */
 const CODE_FROM = process.env.DOOR_CODE_FROM || "12:00";
@@ -88,7 +107,9 @@ export async function issueDoorCodes(p: {
     skipped.length = 0;
     for (const d of doors) {
       try {
-        codes.push({ door: d.name, lockId: d.lockId, ...(await customPasscode(d.lockId, code, validFrom, validTo, name)), custom: true });
+        const made = await customPasscode(d.lockId, code, validFrom, validTo, name);
+        await rememberPeriod(d.lockId, made.passcodeId, validFrom, validTo);
+        codes.push({ door: d.name, lockId: d.lockId, ...made, custom: true });
       } catch (e) {
         if (d.optional) {
           // cửa tuỳ chọn: dùng lại nếu mã đã có sẵn, còn lại bỏ qua — KHÔNG chặn cấp mã cửa nhà/cổng/phòng
@@ -113,6 +134,7 @@ export async function issueDoorCodes(p: {
             const end = Math.max(Number(mine.endDate || 0), validTo);
             try {
               await changePasscodePeriod(d.lockId, Number(mine.keyboardPwdId), start, end);
+              await rememberPeriod(d.lockId, Number(mine.keyboardPwdId), start, end);
               console.log(`[Doors] ${d.name}: mã ${code} của cùng khách → gia hạn tới ${new Date(end).toISOString()} và dùng chung`);
               codes.push({ door: d.name, lockId: d.lockId, passcode: code, passcodeId: Number(mine.keyboardPwdId), custom: true, existing: true });
               continue;
@@ -168,8 +190,8 @@ export async function reconcileBookingCodes(p: {
   codes: string[]; names: string[]; roomNo?: string | null; checkIn: string; checkOut: string; remove: boolean;
   /** cửa chung: mã đang được booking khác (cùng mã, còn hiệu lực) dùng tới ngày này → không rút ngắn/không xoá */
   sharedUntil?: string | null;
-}): Promise<{ changed: string[]; removed: string[]; errors: string[] }> {
-  const out = { changed: [] as string[], removed: [] as string[], errors: [] as string[] };
+}): Promise<{ changed: string[]; removed: string[]; errors: string[]; manual: string[] }> {
+  const out = { changed: [] as string[], removed: [] as string[], errors: [] as string[], manual: [] as string[] };
   const roomLock = p.roomNo ? ROOM_LOCKS[p.roomNo] : undefined;
   const doors = [...ENTRANCE_LOCKS, ...(roomLock ? [{ name: `Room ${p.roomNo} · Phòng ${p.roomNo}`, lockId: roomLock }] : [])];
   const from = vnTime(p.checkIn, CODE_FROM);
@@ -185,13 +207,31 @@ export async function reconcileBookingCodes(p: {
     for (const x of mine) {
       try {
         if (p.remove) {
-          if (shared) { await changePasscodePeriod(d.lockId, Number(x.keyboardPwdId), Math.min(Number(x.startDate || from), from), sharedTo); out.changed.push(`${d.name} ${x.keyboardPwd} (booking khác còn dùng)`); continue; }
+          if (shared) {
+            // booking khác còn dùng mã này → giữ lại; chỉ sửa hạn nếu chủ chưa chỉnh tay
+            if ((await periodOwner(d.lockId, x)) === "bot") {
+              const s0 = Math.min(Number(x.startDate || from), from);
+              await changePasscodePeriod(d.lockId, Number(x.keyboardPwdId), s0, sharedTo);
+              await rememberPeriod(d.lockId, Number(x.keyboardPwdId), s0, sharedTo);
+              out.changed.push(`${d.name} ${x.keyboardPwd} (booking khác còn dùng)`);
+            }
+            continue;
+          }
           await deletePasscode(d.lockId, Number(x.keyboardPwdId)); out.removed.push(`${d.name} ${x.keyboardPwd}`);
         } else {
           const wantTo = shared ? Math.max(to, sharedTo) : to;
           const wantFrom = shared ? Math.min(from, Number(x.startDate || from)) : from;
-          if (x.endDate && (Math.abs(Number(x.endDate) - hour(wantTo)) > 3_600_000 || Math.abs(Number(x.startDate ?? 0) - hour(wantFrom)) > 3_600_000)) {
+          const differs = Boolean(x.endDate) && (Math.abs(Number(x.endDate) - hour(wantTo)) > 3_600_000 || Math.abs(Number(x.startDate ?? 0) - hour(wantFrom)) > 3_600_000);
+          const owner = await periodOwner(d.lockId, x);
+          if (owner === "manual" || (owner === "unknown" && differs)) {
+            // chủ đã chỉnh tay thời hạn (hoặc mã cũ không rõ ai đặt) → KHÔNG sửa lại
+            if (differs) out.manual.push(`${d.name} ${x.keyboardPwd}`);
+            continue;
+          }
+          if (owner === "unknown") await rememberPeriod(d.lockId, Number(x.keyboardPwdId), Number(x.startDate ?? wantFrom), Number(x.endDate ?? wantTo));
+          if (differs) {
             await changePasscodePeriod(d.lockId, Number(x.keyboardPwdId), wantFrom, wantTo);
+            await rememberPeriod(d.lockId, Number(x.keyboardPwdId), wantFrom, wantTo);
             out.changed.push(`${d.name} ${x.keyboardPwd}`);
           }
         }

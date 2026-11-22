@@ -9,7 +9,7 @@ import axios from "axios";
 import { config } from "../config";
 import { store } from "../store";
 import { notifyOwner } from "../notify/telegram";
-import { ENTRANCE_LOCKS, issueDoorCodes, reconcileBookingCodes } from "../locks/doors";
+import { ENTRANCE_LOCKS, issueDoorCodes, reconcileBookingCodes, rememberPeriod } from "../locks/doors";
 import { customPasscode, listGateways, listPasscodes, ttlockConfigured, TTLockError } from "../locks/ttlock";
 
 /** Tên các cửa chung bằng tiếng Việt, vd "Cửa nhà, Cổng trong, Cửa bãi xe" */
@@ -167,7 +167,9 @@ async function addMissingEntranceCodes(it: AuditItem) {
   const problems: string[] = [];
   for (const d of missing) {
     try {
-      await customPasscode(d.lockId, code, Math.max(from, Date.now() - 3_600_000), to, name);
+      const s0 = Math.max(from, Date.now() - 3_600_000);
+      const made = await customPasscode(d.lockId, code, s0, to, name);
+      await rememberPeriod(d.lockId, made.passcodeId, s0, to);
       added.push({ door: d.name, code });
     } catch (e) {
       const dup = e instanceof TTLockError && /exist|repeat|duplicat|same|already/i.test(e.message);
@@ -202,7 +204,7 @@ export async function auditCodes() {
       const sharedUntil = others.length ? others.map((x) => x.checkOut).sort().at(-1)! : null;
       if (!it.active) {
         // huỷ: mã trùng với booking khác còn hiệu lực ở cùng phòng → chỉ gỡ khỏi PMS, không xoá trên khoá
-        const r = it.sharedWithActive ? { removed: [], changed: [], errors: [] as string[] }
+        const r = it.sharedWithActive ? { removed: [], changed: [], errors: [] as string[], manual: [] as string[] }
           : await reconcileBookingCodes({ codes, names, roomNo: it.roomNo, checkIn: it.checkIn, checkOut: it.checkOut, remove: true, sharedUntil });
         if (!r.errors.length) await pms.patch(`/stay/admin/${it.bookingId}`, { doorCodes: [], source: "MANUAL" }).catch(() => {});
         console.log(`[Codes] huỷ ${it.roomNo} ${it.code}: xoá ${r.removed.length}${r.errors.length ? ` · lỗi ${r.errors.join("; ")}` : ""}`);
@@ -215,6 +217,7 @@ export async function auditCodes() {
           await notifyOwner(`🔁 Booking ${it.code} (${it.guestName}, phòng ${it.roomNo}) đổi ngày → bot đã sửa hạn mã ${codes.join("/")} thành 12:00 ${it.checkIn} → 12:00 ${it.checkOut} trên: ${r.changed.join(", ")}`);
         }
         if (r.errors.length) console.warn(`[Codes] ${it.code}: ${r.errors.join("; ")}`);
+        if (r.manual.length) console.log(`[Codes] ${it.code}: giữ nguyên thời hạn chủ đã chỉnh tay — ${r.manual.join(", ")}`);
         await addMissingEntranceCodes(it).catch((e: Error) => console.warn(`[Codes] thêm cửa chung ${it.code}:`, e.message));
       }
     }

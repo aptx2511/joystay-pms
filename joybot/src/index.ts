@@ -150,6 +150,7 @@ async function pmsWindowTick() {
   }
 }
 setInterval(() => void pmsWindowTick(), 60_000);
+setTimeout(() => void issuePendingCodes(), 20_000); // sau khi khởi động lại (deploy) → cấp mã còn thiếu ngay, không chờ tới cửa sổ kế
 setInterval(() => void stayTick(), 60_000); // cổng khách: kiểm tra bộ phát TTLock mỗi giờ · bản tin khách đến 07:30 & 20:00
 setInterval(() => void vacancyTick(), 60_000); // bản tin phòng trống + đề xuất 08:00 (giờ VN)
 setInterval(() => void financeWeeklyTick(), 60_000); // báo cáo doanh thu tuần — thứ Hai 09:30 (giờ VN)
